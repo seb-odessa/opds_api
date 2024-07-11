@@ -9,6 +9,6 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow = "1.0"
-sqlx = { version = "0.7", features = ["runtime-tokio", "sqlite"] }
+rusqlite = { version = "0.31.0", features = ["collation"]}
 log = "0.4"
 env_logger = "0.11"
