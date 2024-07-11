@@ -12,3 +12,4 @@ anyhow = "1.0"
 rusqlite = { version = "0.31.0", features = ["collation"]}
 log = "0.4"
 env_logger = "0.11"
+lazy_static = { version = "1.5.0" }
