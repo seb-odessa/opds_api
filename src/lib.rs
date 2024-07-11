@@ -78,16 +78,18 @@ impl TryFrom<&String> for OpdsApi {
 mod tests {
     use super::*;
 
+    const DATABASE: &'static str = "file:/lib.rus.ec/books.db?mode=ro";
+
     #[test]
     fn is_readonly() -> anyhow::Result<()> {
-        let api = OpdsApi::try_from("file:/lib.rus.ec/books.db?mode=ro")?;
+        let api = OpdsApi::try_from(DATABASE)?;
         assert!(api.is_readonly()?);
         Ok(())
     }
 
     #[test]
     fn authors_next_char_by_prefix() -> anyhow::Result<()> {
-        let api = OpdsApi::try_from("file:/lib.rus.ec/books.db?mode=ro")?;
+        let api = OpdsApi::try_from(DATABASE)?;
         let names = api.authors_next_char_by_prefix(&String::from("Диво"))?;
         assert_eq!(names, vec!["Дивов", "Дивон"]);
         Ok(())
@@ -95,7 +97,7 @@ mod tests {
 
     #[test]
     fn series_next_char_by_prefix() -> anyhow::Result<()> {
-        let api = OpdsApi::try_from("file:/lib.rus.ec/books.db?mode=ro")?;
+        let api = OpdsApi::try_from(DATABASE)?;
         let names = api.series_next_char_by_prefix(&String::from("Warhammer"))?;
         assert_eq!(names, vec!["Warhammer ", "warhammer "]);
         Ok(())
