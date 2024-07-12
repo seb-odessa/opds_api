@@ -8,6 +8,7 @@ use value::Value;
 
 pub mod author;
 pub mod queries;
+pub mod collation;
 pub mod value;
 
 #[derive(Debug)]
@@ -93,6 +94,35 @@ impl OpdsApi {
             None => Err(anyhow!("{:?} Not found", query)),
         }
     }
+
+    fn series_by_name(&self, sql: &str, name: &String) -> anyhow::Result<Vec<Value>> {
+        self.conn
+            .prepare_cached(sql)
+            .inspect(|s| {
+                if let Some(sql) = s.expanded_sql() {
+                    debug!("{sql}")
+                }
+            })
+            .inspect_err(|e| error!("{e}"))?
+            .query([name])
+            .inspect_err(|e| error!("{e}"))?
+            .mapped(|row| {
+                let serie = Value::new(row.get(0)?, row.get::<usize, String>(1)?);
+                Ok(serie)
+            })
+            .try_fold(Vec::new(), |mut acc, item| {
+                acc.push(item.inspect_err(|e| error!("{e}"))?);
+                Ok(acc)
+            })
+    }
+
+    pub fn series_by_serie_name(&self, name: &String) -> anyhow::Result<Vec<Value>> {
+        let query = Query::SeriesBySerieName;
+        match queries::MAP.get(&query).cloned() {
+            Some(sql) => self.series_by_name(sql, name),
+            None => Err(anyhow!("{:?} Not found", query)),
+        }
+    }
 }
 
 impl TryFrom<&str> for OpdsApi {
@@ -101,6 +131,7 @@ impl TryFrom<&str> for OpdsApi {
     fn try_from(database: &str) -> anyhow::Result<Self> {
         debug!("database: {database}");
         let conn = Connection::open(&database).inspect_err(|e| error!("{e}"))?;
+        conn.create_collation("opds", collation::collation)?;
         Ok(Self::new(conn))
     }
 }
@@ -150,12 +181,12 @@ mod tests {
             names,
             vec![
                 Author {
-                    first_name: Value::new(126, "Борис"),
+                    first_name: Value::new(24, "Аркадий"),
                     middle_name: Value::new(29, "Натанович"),
                     last_name: Value::new(9649, "Стругацкий"),
                 },
                 Author {
-                    first_name: Value::new(24, "Аркадий"),
+                    first_name: Value::new(126, "Борис"),
                     middle_name: Value::new(29, "Натанович"),
                     last_name: Value::new(9649, "Стругацкий"),
                 },
@@ -168,4 +199,13 @@ mod tests {
         );
         Ok(())
     }
+
+    #[test]
+    fn series_by_serie_name() -> anyhow::Result<()> {
+        let api = OpdsApi::try_from(DATABASE)?;
+        let names = api.series_by_serie_name(&String::from("Warhammer Horror"))?;
+        assert_eq!(names, vec![Value::new(33771, "Warhammer Horror")]);
+        Ok(())
+    }
+
 }
