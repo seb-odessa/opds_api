@@ -1,6 +1,6 @@
 use crate::value::Value;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Author {
     pub first_name: Value,
     pub middle_name: Value,

@@ -1,14 +1,13 @@
-use anyhow::anyhow;
 use author::Author;
 use log::{debug, error};
-use queries::Query;
-use rusqlite::Connection;
+use queries::{Mapper, Query};
+use rusqlite::{params, CachedStatement, Connection};
 use std::convert::TryFrom;
 use value::Value;
 
 pub mod author;
-pub mod queries;
 pub mod collation;
+pub mod queries;
 pub mod value;
 
 #[derive(Debug)]
@@ -17,6 +16,12 @@ pub struct OpdsApi {
 }
 
 impl OpdsApi {
+    fn prepare(&self, query: &Query) -> anyhow::Result<CachedStatement> {
+        let sql = Query::get(query)?;
+        let statement = self.conn.prepare_cached(sql)?;
+        Ok(statement)
+    }
+
     /// Create OpdsApi instance
     pub fn new(conn: Connection) -> Self {
         OpdsApi { conn }
@@ -27,100 +32,70 @@ impl OpdsApi {
         Ok(self.conn.is_readonly(rusqlite::DatabaseName::Main)?)
     }
 
-    fn next_char_by_prefix(&self, sql: &str, prefix: &String) -> anyhow::Result<Vec<String>> {
-        let len = (prefix.chars().count() + 1) as u32;
-        self.conn
-            .prepare_cached(sql)
-            .inspect(|s| {
-                if let Some(sql) = s.expanded_sql() {
-                    debug!("{sql}")
-                }
-            })
-            .inspect_err(|e| error!("{e}"))?
-            .query((len, prefix))
-            .inspect_err(|e| error!("{e}"))?
-            .mapped(|row| row.get(0))
-            .try_fold(Vec::new(), |mut acc, item| {
-                acc.push(item.inspect_err(|e| error!("{e}"))?);
-                Ok(acc)
-            })
-    }
-
     /// Returns next possible variants of the author name by given prefix
     pub fn authors_next_char_by_prefix(&self, prefix: &String) -> anyhow::Result<Vec<String>> {
+        let len = (prefix.chars().count() + 1) as u32;
         let query = Query::AuthorNextCharByPrefix;
-        match queries::MAP.get(&query).cloned() {
-            Some(sql) => self.next_char_by_prefix(sql, prefix),
-            None => Err(anyhow!("{:?} Not found", query)),
+        if let Mapper::String(mapper) = Query::mapper(&query) {
+            let mut statement = self.prepare(&query)?;
+            let rows = statement.query(params![len, prefix])?.mapped(mapper);
+            let res = transfrom(rows)?;
+            Ok(res)
+        } else {
+            Err(anyhow::anyhow!("Unexpected mapper"))
         }
     }
 
     /// Returns next possible variants of the serie name by given prefix
     pub fn series_next_char_by_prefix(&self, prefix: &String) -> anyhow::Result<Vec<String>> {
+        let len = (prefix.chars().count() + 1) as u32;
         let query = Query::SerieNextCharByPrefix;
-        match queries::MAP.get(&query).cloned() {
-            Some(sql) => self.next_char_by_prefix(sql, prefix),
-            None => Err(anyhow!("{:?} Not found", query)),
+        if let Mapper::String(mapper) = Query::mapper(&query) {
+            let mut statement = self.prepare(&query)?;
+            let rows = statement.query(params![len, prefix])?.mapped(mapper);
+            let res = transfrom(rows)?;
+            Ok(res)
+        } else {
+            Err(anyhow::anyhow!("Unexpected mapper"))
         }
     }
 
-    fn authors_by_name(&self, sql: &str, name: &String) -> anyhow::Result<Vec<Author>> {
-        self.conn
-            .prepare_cached(sql)
-            .inspect(|s| {
-                if let Some(sql) = s.expanded_sql() {
-                    debug!("{sql}")
-                }
-            })
-            .inspect_err(|e| error!("{e}"))?
-            .query([name])
-            .inspect_err(|e| error!("{e}"))?
-            .mapped(|row| {
-                let fname = Value::new(row.get(0)?, row.get::<usize, String>(1)?);
-                let mname = Value::new(row.get(2)?, row.get::<usize, String>(3)?);
-                let lname = Value::new(row.get(4)?, row.get::<usize, String>(5)?);
-                Ok(Author::new(fname, mname, lname))
-            })
-            .try_fold(Vec::new(), |mut acc, item| {
-                acc.push(item.inspect_err(|e| error!("{e}"))?);
-                Ok(acc)
-            })
-    }
-
+    /// Returns Authors by exact last name
     pub fn authors_by_last_name(&self, name: &String) -> anyhow::Result<Vec<Author>> {
         let query = Query::AuthorsByLastName;
-        match queries::MAP.get(&query).cloned() {
-            Some(sql) => self.authors_by_name(sql, name),
-            None => Err(anyhow!("{:?} Not found", query)),
+        if let Mapper::Author(mapper) = Query::mapper(&query) {
+            let mut statement = self.prepare(&query)?;
+            let rows = statement.query([name])?.mapped(mapper);
+            let res = transfrom(rows)?;
+            Ok(res)
+        } else {
+            Err(anyhow::anyhow!("Unexpected mapper"))
         }
     }
 
-    fn series_by_name(&self, sql: &str, name: &String) -> anyhow::Result<Vec<Value>> {
-        self.conn
-            .prepare_cached(sql)
-            .inspect(|s| {
-                if let Some(sql) = s.expanded_sql() {
-                    debug!("{sql}")
-                }
-            })
-            .inspect_err(|e| error!("{e}"))?
-            .query([name])
-            .inspect_err(|e| error!("{e}"))?
-            .mapped(|row| {
-                let serie = Value::new(row.get(0)?, row.get::<usize, String>(1)?);
-                Ok(serie)
-            })
-            .try_fold(Vec::new(), |mut acc, item| {
-                acc.push(item.inspect_err(|e| error!("{e}"))?);
-                Ok(acc)
-            })
-    }
-
+    /// Returns Series by exact serie name
     pub fn series_by_serie_name(&self, name: &String) -> anyhow::Result<Vec<Value>> {
         let query = Query::SeriesBySerieName;
-        match queries::MAP.get(&query).cloned() {
-            Some(sql) => self.series_by_name(sql, name),
-            None => Err(anyhow!("{:?} Not found", query)),
+        if let Mapper::Value(mapper) = Query::mapper(&query) {
+            let mut statement = self.prepare(&query)?;
+            let rows = statement.query([name])?.mapped(mapper);
+            let res = transfrom(rows)?;
+            Ok(res)
+        } else {
+            Err(anyhow::anyhow!("Unexpected mapper"))
+        }
+    }
+
+    /// Returns Author by ids
+    pub fn author_by_ids(&self, fid: u32, mid: u32, lid: u32) -> anyhow::Result<Option<Author>> {
+        let query = Query::AuthorByIds;
+        if let Mapper::Author(mapper) = Query::mapper(&query) {
+            let mut statement = self.prepare(&query)?;
+            let rows = statement.query([fid, mid, lid])?.mapped(mapper);
+            let res = transfrom(rows)?;
+            Ok(res.first().cloned())
+        } else {
+            Err(anyhow::anyhow!("Unexpected mapper"))
         }
     }
 }
@@ -144,6 +119,13 @@ impl TryFrom<&String> for OpdsApi {
     }
 }
 
+fn transfrom<T, E, I>(collection: I) -> anyhow::Result<Vec<T>, E>
+where
+    I: IntoIterator<Item = rusqlite::Result<T, E>>,
+{
+    collection.into_iter().collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -160,25 +142,25 @@ mod tests {
     #[test]
     fn authors_next_char_by_prefix() -> anyhow::Result<()> {
         let api = OpdsApi::try_from(DATABASE)?;
-        let names = api.authors_next_char_by_prefix(&String::from("Диво"))?;
-        assert_eq!(names, vec!["Дивов", "Дивон"]);
+        let result = api.authors_next_char_by_prefix(&String::from("Диво"))?;
+        assert_eq!(result, vec!["Дивов", "Дивон"]);
         Ok(())
     }
 
     #[test]
     fn series_next_char_by_prefix() -> anyhow::Result<()> {
         let api = OpdsApi::try_from(DATABASE)?;
-        let names = api.series_next_char_by_prefix(&String::from("Warhammer"))?;
-        assert_eq!(names, vec!["Warhammer ", "warhammer "]);
+        let result = api.series_next_char_by_prefix(&String::from("Warhammer"))?;
+        assert_eq!(result, vec!["Warhammer ", "warhammer "]);
         Ok(())
     }
 
     #[test]
     fn authors_by_last_name() -> anyhow::Result<()> {
         let api = OpdsApi::try_from(DATABASE)?;
-        let names = api.authors_by_last_name(&String::from("Стругацкий"))?;
+        let result = api.authors_by_last_name(&String::from("Стругацкий"))?;
         assert_eq!(
-            names,
+            result,
             vec![
                 Author {
                     first_name: Value::new(24, "Аркадий"),
@@ -203,9 +185,23 @@ mod tests {
     #[test]
     fn series_by_serie_name() -> anyhow::Result<()> {
         let api = OpdsApi::try_from(DATABASE)?;
-        let names = api.series_by_serie_name(&String::from("Warhammer Horror"))?;
-        assert_eq!(names, vec![Value::new(33771, "Warhammer Horror")]);
+        let result = api.series_by_serie_name(&String::from("Warhammer Horror"))?;
+        assert_eq!(result, vec![Value::new(33771, "Warhammer Horror")]);
         Ok(())
     }
 
+    #[test]
+    fn author_by_ids() -> anyhow::Result<()> {
+        let api = OpdsApi::try_from(DATABASE)?;
+        let result = api.author_by_ids(126, 29, 9649)?;
+        assert_eq!(
+            result,
+            Some(Author {
+                first_name: Value::new(126, "Борис"),
+                middle_name: Value::new(29, "Натанович"),
+                last_name: Value::new(9649, "Стругацкий"),
+            })
+        );
+        Ok(())
+    }
 }
