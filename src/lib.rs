@@ -1,14 +1,16 @@
-use author::Author;
 use log::{debug, error};
 use queries::{Mapper, Query};
 use rusqlite::{params, CachedStatement, Connection};
+
 use std::convert::TryFrom;
 
-// pub use author::Author;
+pub use author::Author;
+pub use book::Book;
 pub use serie::Serie;
 pub use value::Value;
 
 pub mod author;
+pub mod book;
 pub mod collation;
 pub mod queries;
 pub mod serie;
@@ -115,6 +117,25 @@ impl OpdsApi {
             Err(anyhow::anyhow!("Unexpected mapper"))
         }
     }
+
+    /// Returns book by Author by ids and Serie id
+    pub fn books_by_author_ids_and_serie_id(
+        &self,
+        fid: u32,
+        mid: u32,
+        lid: u32,
+        sid: u32,
+    ) -> anyhow::Result<Vec<Book>> {
+        let query = Query::BooksByAuthorIdsAndSerieId;
+        if let Mapper::Book(mapper) = Query::mapper(&query) {
+            let mut statement = self.prepare(&query)?;
+            let rows = statement.query([fid, mid, lid, sid])?.mapped(mapper);
+            let res = transfrom(rows)?;
+            Ok(res)
+        } else {
+            Err(anyhow::anyhow!("Unexpected mapper"))
+        }
+    }
 }
 
 impl TryFrom<&str> for OpdsApi {
@@ -160,6 +181,7 @@ mod tests {
     fn authors_next_char_by_prefix() -> anyhow::Result<()> {
         let api = OpdsApi::try_from(DATABASE)?;
         let result = api.authors_next_char_by_prefix(&String::from("Сто"))?;
+
         assert_eq!(result, vec!["Стое", "Стоу"]);
         Ok(())
     }
@@ -168,6 +190,7 @@ mod tests {
     fn series_next_char_by_prefix() -> anyhow::Result<()> {
         let api = OpdsApi::try_from(DATABASE)?;
         let result = api.series_next_char_by_prefix(&String::from("Го"))?;
+
         assert_eq!(result, vec!["Гон", "Гор", "Гос"]);
         Ok(())
     }
@@ -196,6 +219,7 @@ mod tests {
             .into_iter()
             .map(|a| format!("{a}"))
             .collect::<Vec<_>>();
+
         assert_eq!(
             result,
             vec![String::from("Кровь на воздух [Павел Сергеевич Иевлев] (2)")]
@@ -222,13 +246,36 @@ mod tests {
     #[test]
     fn author_by_ids() -> anyhow::Result<()> {
         let api = OpdsApi::try_from(DATABASE)?;
-        // 56	Кровь на воздух	2	50	Павел	42	Сергеевич	281	Иевлев
         let result = api
             .author_by_ids(50, 42, 281)?
             .into_iter()
             .map(|a| format!("{a}"))
             .collect::<Vec<_>>();
+
         assert_eq!(result, vec![String::from("Павел Сергеевич Иевлев")]);
+        Ok(())
+    }
+
+    #[test]
+    fn books_by_author_ids_and_serie_id() -> anyhow::Result<()> {
+        let api = OpdsApi::try_from(DATABASE)?;
+
+        let result = api
+            .books_by_author_ids_and_serie_id(50, 42, 281, 56)?
+            .into_iter()
+            .map(|a| format!("{a}"))
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            result,
+            vec![
+                String::from(
+                    "1 «Кровь на воздух», часть первая «Капитан-соло» (2024-06-08) [3.50 MB]"
+                ),
+                String::from("2 Пустота внутри кота (2024-06-23) [4.29 MB]")
+            ]
+        );
+
         Ok(())
     }
 }

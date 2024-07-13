@@ -2,7 +2,7 @@ use lazy_static;
 use rusqlite::Row;
 use std::collections::HashMap;
 
-use crate::{Author, Serie, Value};
+use crate::{Author, Book, Serie, Value};
 
 #[derive(Debug)]
 pub enum Mapper {
@@ -10,6 +10,7 @@ pub enum Mapper {
     Value(fn(&Row) -> rusqlite::Result<Value>),
     Author(fn(&Row) -> rusqlite::Result<Author>),
     Serie(fn(&Row) -> rusqlite::Result<Serie>),
+    Book(fn(&Row) -> rusqlite::Result<Book>),
     None,
 }
 
@@ -21,15 +22,17 @@ pub enum Query {
     SeriesBySerieName,
     SeriesByAuthorIds,
     AuthorByIds,
+    BooksByAuthorIdsAndSerieId,
 }
 impl Query {
-    pub const VALUES: [Self; 6] = [
+    pub const VALUES: [Self; 7] = [
         Self::AuthorNextCharByPrefix,
         Self::SerieNextCharByPrefix,
         Self::AuthorsByLastName,
         Self::SeriesBySerieName,
         Self::SeriesByAuthorIds,
         Self::AuthorByIds,
+        Self::BooksByAuthorIdsAndSerieId,
     ];
 
     pub fn get(&self) -> anyhow::Result<&'static str> {
@@ -47,6 +50,7 @@ impl Query {
             Self::SeriesBySerieName => Mapper::Serie(map_to_serie),
             Self::SeriesByAuthorIds => Mapper::Serie(map_to_serie),
             Self::AuthorByIds => Mapper::Author(map_to_author),
+            Self::BooksByAuthorIdsAndSerieId => Mapper::Book(map_to_book),
         }
     }
 }
@@ -146,6 +150,26 @@ lazy_static::lazy_static! {
             WHERE first_names.id = $1 AND middle_names.id = $2 AND last_names.id = $3;
             "#
         );
+        m.insert(
+            Query::BooksByAuthorIdsAndSerieId,
+            r#"
+            SELECT
+                books.book_id AS id,
+                series_map.serie_num AS idx,
+                titles.value AS name,
+                books.book_size AS size,
+                dates.value AS added
+            FROM authors_map
+            LEFT JOIN books ON authors_map.book_id = books.book_id
+            LEFT JOIN titles ON books.title_id = titles.id
+            LEFT JOIN series_map ON  books.book_id = series_map.book_id
+            LEFT JOIN series ON series_map.serie_id = series.id
+            LEFT JOIN dates ON  books.date_id = dates.id
+            WHERE first_name_id = $1 AND middle_name_id = $2 AND last_name_id = $3 AND series.id = $4
+            ORDER BY 2, 3, 5;
+            "#
+        );
+
 
         assert_eq!(Query::VALUES.len(), m.len());
         return m;
@@ -192,4 +216,16 @@ fn map_to_serie(row: &Row) -> rusqlite::Result<Serie> {
     let author = map_to_author(row)?;
 
     Ok(Serie::new(id, name, count, author))
+}
+
+fn map_to_book(row: &Row) -> rusqlite::Result<Book> {
+    let statement = row.as_ref();
+
+    let id: u32 = row.get(statement.column_index("id")?)?;
+    let idx: u32 = row.get(statement.column_index("idx")?)?;
+    let name: String = row.get(statement.column_index("name")?)?;
+    let size: u32 = row.get(statement.column_index("size")?)?;
+    let added: String = row.get(statement.column_index("added")?)?;
+
+    Ok(Book::new(id, idx, name, size, added))
 }
