@@ -179,6 +179,32 @@ impl OpdsApi {
             Err(anyhow::anyhow!("Unexpected mapper"))
         }
     }
+
+    /// Returns book by Serie id
+    pub fn books_by_serie_id(&self, sid: u32) -> anyhow::Result<Vec<Book>> {
+        let query = Query::BooksBySerieId;
+        if let Mapper::Book(mapper) = Query::mapper(&query) {
+            let mut statement = self.prepare(&query)?;
+            let rows = statement.query([sid])?.mapped(mapper);
+            let res = transfrom(rows)?;
+            Ok(res)
+        } else {
+            Err(anyhow::anyhow!("Unexpected mapper"))
+        }
+    }
+
+    /// Returns genres Meta
+    pub fn genres_meta(&self) -> anyhow::Result<Vec<String>> {
+        let query = Query::GenresMeta;
+        if let Mapper::String(mapper) = Query::mapper(&query) {
+            let mut statement = self.prepare(&query)?;
+            let rows = statement.query([])?.mapped(mapper);
+            let res = transfrom(rows)?;
+            Ok(res)
+        } else {
+            Err(anyhow::anyhow!("Unexpected mapper"))
+        }
+    }
 }
 
 impl TryFrom<&str> for OpdsApi {
@@ -241,11 +267,13 @@ mod tests {
     #[test]
     fn authors_by_last_name() -> anyhow::Result<()> {
         let api = OpdsApi::try_from(DATABASE)?;
-        let result = api
+        let strings = api
             .authors_by_last_name(&String::from("Кейн"))?
             .into_iter()
             .map(|a| format!("{a}"))
             .collect::<Vec<_>>();
+
+        let result = strings.iter().map(|a| a.as_str()).collect::<Vec<_>>();
 
         assert_eq!(
             result,
@@ -257,45 +285,45 @@ mod tests {
     #[test]
     fn series_by_serie_name() -> anyhow::Result<()> {
         let api = OpdsApi::try_from(DATABASE)?;
-        let result = api
+        let strings = api
             .series_by_serie_name(&String::from("Кровь на воздух"))?
             .into_iter()
             .map(|a| format!("{a}"))
             .collect::<Vec<_>>();
 
-        assert_eq!(
-            result,
-            vec![String::from("Кровь на воздух [Павел Сергеевич Иевлев] (2)")]
-        );
+        let result = strings.iter().map(|a| a.as_str()).collect::<Vec<_>>();
+
+        assert_eq!(result, vec!["Кровь на воздух [Павел Сергеевич Иевлев] (2)"]);
         Ok(())
     }
 
     #[test]
     fn series_by_author_ids() -> anyhow::Result<()> {
         let api = OpdsApi::try_from(DATABASE)?;
-        let result = api
+        let strings = api
             .series_by_author_ids(50, 42, 281)?
             .into_iter()
             .map(|a| format!("{a}"))
             .collect::<Vec<_>>();
 
-        assert_eq!(
-            result,
-            vec![String::from("Кровь на воздух [Павел Сергеевич Иевлев] (2)")]
-        );
+        let result = strings.iter().map(|a| a.as_str()).collect::<Vec<_>>();
+
+        assert_eq!(result, vec!["Кровь на воздух [Павел Сергеевич Иевлев] (2)"]);
         Ok(())
     }
 
     #[test]
     fn author_by_ids() -> anyhow::Result<()> {
         let api = OpdsApi::try_from(DATABASE)?;
-        let result = api
+        let strings = api
             .author_by_ids(50, 42, 281)?
             .into_iter()
             .map(|a| format!("{a}"))
             .collect::<Vec<_>>();
 
-        assert_eq!(result, vec![String::from("Павел Сергеевич Иевлев")]);
+        let result = strings.iter().map(|a| a.as_str()).collect::<Vec<_>>();
+
+        assert_eq!(result, vec!["Павел Сергеевич Иевлев"]);
         Ok(())
     }
 
@@ -303,17 +331,19 @@ mod tests {
     fn books_by_author_ids() -> anyhow::Result<()> {
         let api = OpdsApi::try_from(DATABASE)?;
 
-        let result = api
+        let strings = api
             .books_by_author_ids(43, 2, 184)?
             .into_iter()
             .map(|a| format!("{a}"))
             .collect::<Vec<_>>();
 
+        let result = strings.iter().map(|a| a.as_str()).collect::<Vec<_>>();
+
         assert_eq!(
             result,
             vec![
-                String::from("День писателя - Анна Велес (2024-06-18) [976.19 KB]"),
-                String::from("2 Хозяин мрачного замка - Анна Велес (2024-06-05) [1.91 MB]")
+                "День писателя - Анна Велес (2024-06-18) [976.19 KB]",
+                "2 Хозяин мрачного замка - Анна Велес (2024-06-05) [1.91 MB]"
             ]
         );
         Ok(())
@@ -323,17 +353,17 @@ mod tests {
     fn books_by_author_ids_and_serie_id() -> anyhow::Result<()> {
         let api = OpdsApi::try_from(DATABASE)?;
 
-        let result = api
+        let strings = api
             .books_by_author_ids_and_serie_id(43, 2, 184, 29)?
             .into_iter()
             .map(|a| format!("{a}"))
             .collect::<Vec<_>>();
 
+        let result = strings.iter().map(|a| a.as_str()).collect::<Vec<_>>();
+
         assert_eq!(
             result,
-            vec![String::from(
-                "2 Хозяин мрачного замка - Анна Велес (2024-06-05) [1.91 MB]"
-            )]
+            vec!["2 Хозяин мрачного замка - Анна Велес (2024-06-05) [1.91 MB]"]
         );
 
         Ok(())
@@ -343,15 +373,76 @@ mod tests {
     fn books_by_author_ids_without_serie() -> anyhow::Result<()> {
         let api = OpdsApi::try_from(DATABASE)?;
 
-        let result = api
+        let strings = api
             .books_by_author_ids_without_serie(43, 2, 184)?
             .into_iter()
             .map(|a| format!("{a}"))
             .collect::<Vec<_>>();
 
+        let result = strings.iter().map(|a| a.as_str()).collect::<Vec<_>>();
+
         assert_eq!(
             result,
-            vec![String::from("День писателя - Анна Велес (2024-06-18) [976.19 KB]")]
+            vec!["День писателя - Анна Велес (2024-06-18) [976.19 KB]"]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn books_by_serie_id() -> anyhow::Result<()> {
+        let api = OpdsApi::try_from(DATABASE)?;
+
+        let strings = api
+            .books_by_serie_id(29)?
+            .into_iter()
+            .map(|a| format!("{a}"))
+            .collect::<Vec<_>>();
+
+        let result = strings.iter().map(|a| a.as_str()).collect::<Vec<_>>();
+
+        assert_eq!(
+            result,
+            vec!["2 Хозяин мрачного замка - Анна Велес (2024-06-05) [1.91 MB]"]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn genres_meta() -> anyhow::Result<()> {
+        let api = OpdsApi::try_from(DATABASE)?;
+
+        let strings = api.genres_meta()?;
+        let result = strings.iter().map(|a| a.as_str()).collect::<Vec<_>>();
+
+        assert_eq!(
+            result,
+            vec![
+                "Деловая литература",
+                "Детективы и Триллеры",
+                "Документальная литература",
+                "Дом и семья",
+                "Драматургия",
+                "Искусство, Искусствоведение, Дизайн",
+                "Компьютеры и Интернет",
+                "Литература для детей",
+                "Любовные романы",
+                "Наука, Образование",
+                "Поэзия",
+                "Приключения",
+                "Проза",
+                "Прочее",
+                "Религия, духовность, Эзотерика",
+                "Справочная литература",
+                "Старинное",
+                "Техника",
+                "Учебники и пособия",
+                "Фантастика",
+                "Фольклор",
+                "Эзотерика",
+                "Юмор"
+            ]
         );
 
         Ok(())

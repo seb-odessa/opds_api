@@ -23,10 +23,11 @@ pub enum Query {
     SeriesByAuthorIds,
     AuthorByIds,
     BooksByAuthorIds,
-    // BooksBySerieId,
+    BooksBySerieId,
+    GenresMeta,
 }
 impl Query {
-    pub const VALUES: [Self; 7] = [
+    pub const VALUES: [Self; 9] = [
         Self::AuthorNextCharByPrefix,
         Self::SerieNextCharByPrefix,
         Self::AuthorsByLastName,
@@ -34,7 +35,8 @@ impl Query {
         Self::SeriesByAuthorIds,
         Self::AuthorByIds,
         Self::BooksByAuthorIds,
-        // Self::BooksBySerieId,
+        Self::BooksBySerieId,
+        Self::GenresMeta,
     ];
 
     pub fn get(&self) -> anyhow::Result<&'static str> {
@@ -53,7 +55,8 @@ impl Query {
             Self::SeriesByAuthorIds => Mapper::Serie(map_to_serie),
             Self::AuthorByIds => Mapper::Author(map_to_author),
             Self::BooksByAuthorIds => Mapper::Book(map_to_book),
-            // Self::BooksBySerieId => Mapper::Book(map_to_book),
+            Self::BooksBySerieId => Mapper::Book(map_to_book),
+            Self::GenresMeta => Mapper::String(map_to_string),
         }
     }
 }
@@ -179,6 +182,33 @@ lazy_static::lazy_static! {
             ORDER BY sid, idx, name, added COLLATE opds;
             "#
         );
+        m.insert(
+            Query::BooksBySerieId,
+            r#"
+            SELECT
+                books.book_id AS id,
+				titles.value AS name,
+                series.id AS sid,
+                series_map.serie_num AS idx,
+                first_names.id AS fid, first_names.value AS fname,
+                middle_names.id AS mid, middle_names.value AS mname,
+			    last_names.id AS lid, last_names.value AS lname,
+                books.book_size AS size,
+                dates.value AS added
+            FROM authors_map
+            JOIN books ON books.book_id = authors_map.book_id
+            JOIN titles ON titles.id = books.title_id
+            JOIN dates ON  books.date_id = dates.id
+            LEFT JOIN series_map ON series_map.book_id = books.book_id
+		    LEFT JOIN series ON series.id = series_map.serie_id
+   		    JOIN first_names ON first_names.id = first_name_id
+		    JOIN middle_names ON middle_names.id = middle_name_id
+		    JOIN last_names ON last_names.id = last_name_id
+            WHERE series.id = $1
+            ORDER BY idx, name, added COLLATE opds;
+            "#
+        );
+        m.insert(Query::GenresMeta,"SELECT DISTINCT meta AS value FROM genres_def ORDER BY value COLLATE opds");
 
         assert_eq!(Query::VALUES.len(), m.len());
         return m;
