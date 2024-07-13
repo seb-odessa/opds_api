@@ -92,6 +92,19 @@ impl OpdsApi {
         }
     }
 
+    /// Returns Series by Genre name
+    pub fn series_by_genre(&self, name: &String) -> anyhow::Result<Vec<Serie>> {
+        let query = Query::SeriesByGenre;
+        if let Mapper::Serie(mapper) = Query::mapper(&query) {
+            let mut statement = self.prepare(&query)?;
+            let rows = statement.query([name])?.mapped(mapper);
+            let res = transfrom(rows)?;
+            Ok(res)
+        } else {
+            Err(anyhow::anyhow!("Unexpected mapper"))
+        }
+    }
+
     /// Returns Series by authors ids
     pub fn series_by_author_ids(&self, fid: u32, mid: u32, lid: u32) -> anyhow::Result<Vec<Serie>> {
         let query = Query::SeriesByAuthorIds;
@@ -307,6 +320,27 @@ mod tests {
         let result = strings.iter().map(|a| a.as_str()).collect::<Vec<_>>();
 
         assert_eq!(result, vec!["Кровь на воздух [Павел Сергеевич Иевлев] (2)"]);
+        Ok(())
+    }
+
+    #[test]
+    fn series_by_genre() -> anyhow::Result<()> {
+        let api = OpdsApi::try_from(DATABASE)?;
+        let strings = api
+            .series_by_genre(&String::from("Исторические приключения"))?
+            .into_iter()
+            .map(|a| format!("{a}"))
+            .collect::<Vec<_>>();
+
+        let result = strings.iter().map(|a| a.as_str()).collect::<Vec<_>>();
+
+        assert_eq!(
+            result,
+            vec![
+                "Варяг [Мазин] [Александр Владимирович Мазин] (1)",
+                "Восток (РИПОЛ) [Владимир Вячеславович Малявин] (1)"
+            ]
+        );
         Ok(())
     }
 
