@@ -8,6 +8,7 @@ use value::Value;
 pub mod author;
 pub mod collation;
 pub mod queries;
+pub mod serie;
 pub mod value;
 
 #[derive(Debug)]
