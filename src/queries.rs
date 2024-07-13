@@ -2,13 +2,14 @@ use lazy_static;
 use rusqlite::Row;
 use std::collections::HashMap;
 
-use crate::{author::Author, value::Value};
+use crate::{Author, Serie, Value};
 
 #[derive(Debug)]
 pub enum Mapper {
     String(fn(&Row) -> rusqlite::Result<String>),
     Value(fn(&Row) -> rusqlite::Result<Value>),
     Author(fn(&Row) -> rusqlite::Result<Author>),
+    Serie(fn(&Row) -> rusqlite::Result<Serie>),
     None,
 }
 
@@ -18,14 +19,16 @@ pub enum Query {
     SerieNextCharByPrefix,
     AuthorsByLastName,
     SeriesBySerieName,
+    SeriesByAuthorIds,
     AuthorByIds,
 }
 impl Query {
-    pub const VALUES: [Self; 5] = [
+    pub const VALUES: [Self; 6] = [
         Self::AuthorNextCharByPrefix,
         Self::SerieNextCharByPrefix,
         Self::AuthorsByLastName,
         Self::SeriesBySerieName,
+        Self::SeriesByAuthorIds,
         Self::AuthorByIds,
     ];
 
@@ -40,10 +43,10 @@ impl Query {
         match self {
             Self::AuthorNextCharByPrefix => Mapper::String(map_to_string),
             Self::SerieNextCharByPrefix => Mapper::String(map_to_string),
-            Self::AuthorsByLastName => Mapper::Author(map_to_authors),
-            Self::SeriesBySerieName => Mapper::Value(map_to_value),
-            Self::AuthorByIds => Mapper::Author(map_to_authors),
-            // _ => Mapper::None,
+            Self::AuthorsByLastName => Mapper::Author(map_to_author),
+            Self::SeriesBySerieName => Mapper::Serie(map_to_serie),
+            Self::SeriesByAuthorIds => Mapper::Serie(map_to_serie),
+            Self::AuthorByIds => Mapper::Author(map_to_author),
         }
     }
 }
@@ -90,7 +93,47 @@ lazy_static::lazy_static! {
         );
         m.insert(
             Query::SeriesBySerieName,
-            "SELECT DISTINCT id, value FROM series WHERE value = $1 ORDER BY 1 COLLATE opds;"
+            r#"
+            SELECT
+                series.id AS id,
+                series.value AS name,
+                count(books.book_id) as count,
+			    first_names.id AS fid, first_names.value AS fname,
+                middle_names.id AS mid, middle_names.value AS mname,
+			    last_names.id AS lid, last_names.value AS lname
+            FROM series
+		    JOIN series_map ON series_map.serie_id = series.id
+		    JOIN authors_map ON authors_map.book_id = series_map.book_id
+		    JOIN books ON books.book_id = series_map.book_id
+		    JOIN first_names ON first_names.id = first_name_id
+		    JOIN middle_names ON middle_names.id = middle_name_id
+		    JOIN last_names ON last_names.id = last_name_id
+            WHERE series.value = $1 AND name IS NOT NULL
+            GROUP BY 1, 4, 6, 8
+		    ORDER BY 6, 4, 5 COLLATE opds;
+            "#
+        );
+        m.insert(
+            Query::SeriesByAuthorIds,
+            r#"
+           	SELECT
+                series.id AS id,
+                series.value AS name,
+			    count(books.book_id) as count,
+			    first_names.id AS fid, first_names.value AS fname,
+                middle_names.id AS mid, middle_names.value AS mname,
+			    last_names.id AS lid, last_names.value AS lname
+            FROM authors_map
+            LEFT JOIN books ON authors_map.book_id = books.book_id
+            LEFT JOIN series_map ON  books.book_id = series_map.book_id
+            LEFT JOIN series ON series_map.serie_id = series.id
+		    JOIN first_names ON first_names.id = first_name_id
+		    JOIN middle_names ON middle_names.id = middle_name_id
+		    JOIN last_names ON last_names.id = last_name_id
+            WHERE first_name_id = $1 AND middle_name_id = $2 AND last_name_id = $3 AND name IS NOT NULL
+            GROUP BY 1
+		    ORDER BY 6, 4, 5 COLLATE opds;
+            "#
         );
         m.insert(
             Query::AuthorByIds,
@@ -114,14 +157,14 @@ fn map_to_string(row: &Row) -> rusqlite::Result<String> {
     row.get(statement.column_index("value")?)
 }
 
-fn map_to_value(row: &Row) -> rusqlite::Result<Value> {
-    let statement = row.as_ref();
-    let id: u32 = row.get(statement.column_index("id")?)?;
-    let value: String = row.get(statement.column_index("value")?)?;
-    Ok(Value::new(id, value))
-}
+// fn map_to_value(row: &Row) -> rusqlite::Result<Value> {
+//     let statement = row.as_ref();
+//     let id: u32 = row.get(statement.column_index("id")?)?;
+//     let value: String = row.get(statement.column_index("value")?)?;
+//     Ok(Value::new(id, value))
+// }
 
-fn map_to_authors(row: &Row) -> rusqlite::Result<Author> {
+fn map_to_author(row: &Row) -> rusqlite::Result<Author> {
     let statement = row.as_ref();
 
     let fid: u32 = row.get(statement.column_index("fid")?)?;
@@ -138,4 +181,15 @@ fn map_to_authors(row: &Row) -> rusqlite::Result<Author> {
         Value::new(mid, mname),
         Value::new(lid, lname),
     ))
+}
+
+fn map_to_serie(row: &Row) -> rusqlite::Result<Serie> {
+    let statement = row.as_ref();
+
+    let id: u32 = row.get(statement.column_index("id")?)?;
+    let name: String = row.get(statement.column_index("name")?)?;
+    let count: u32 = row.get(statement.column_index("count")?)?;
+    let author = map_to_author(row)?;
+
+    Ok(Serie::new(id, name, count, author))
 }

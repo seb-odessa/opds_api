@@ -3,7 +3,10 @@ use log::{debug, error};
 use queries::{Mapper, Query};
 use rusqlite::{params, CachedStatement, Connection};
 use std::convert::TryFrom;
-use value::Value;
+
+// pub use author::Author;
+pub use serie::Serie;
+pub use value::Value;
 
 pub mod author;
 pub mod collation;
@@ -75,11 +78,24 @@ impl OpdsApi {
     }
 
     /// Returns Series by exact serie name
-    pub fn series_by_serie_name(&self, name: &String) -> anyhow::Result<Vec<Value>> {
+    pub fn series_by_serie_name(&self, name: &String) -> anyhow::Result<Vec<Serie>> {
         let query = Query::SeriesBySerieName;
-        if let Mapper::Value(mapper) = Query::mapper(&query) {
+        if let Mapper::Serie(mapper) = Query::mapper(&query) {
             let mut statement = self.prepare(&query)?;
             let rows = statement.query([name])?.mapped(mapper);
+            let res = transfrom(rows)?;
+            Ok(res)
+        } else {
+            Err(anyhow::anyhow!("Unexpected mapper"))
+        }
+    }
+
+    /// Returns Series by authors ids
+    pub fn series_by_author_ids(&self, fid: u32, mid: u32, lid: u32) -> anyhow::Result<Vec<Serie>> {
+        let query = Query::SeriesByAuthorIds;
+        if let Mapper::Serie(mapper) = Query::mapper(&query) {
+            let mut statement = self.prepare(&query)?;
+            let rows = statement.query([fid, mid, lid])?.mapped(mapper);
             let res = transfrom(rows)?;
             Ok(res)
         } else {
@@ -131,7 +147,7 @@ where
 mod tests {
     use super::*;
 
-    const DATABASE: &'static str = "file:/lib.rus.ec/books.db?mode=ro";
+    const DATABASE: &'static str = "file:data/fb2-768381-769440.db?mode=ro";
 
     #[test]
     fn is_readonly() -> anyhow::Result<()> {
@@ -143,42 +159,31 @@ mod tests {
     #[test]
     fn authors_next_char_by_prefix() -> anyhow::Result<()> {
         let api = OpdsApi::try_from(DATABASE)?;
-        let result = api.authors_next_char_by_prefix(&String::from("Диво"))?;
-        assert_eq!(result, vec!["Дивов", "Дивон"]);
+        let result = api.authors_next_char_by_prefix(&String::from("Сто"))?;
+        assert_eq!(result, vec!["Стое", "Стоу"]);
         Ok(())
     }
 
     #[test]
     fn series_next_char_by_prefix() -> anyhow::Result<()> {
         let api = OpdsApi::try_from(DATABASE)?;
-        let result = api.series_next_char_by_prefix(&String::from("Warhammer"))?;
-        assert_eq!(result, vec!["Warhammer ", "warhammer "]);
+        let result = api.series_next_char_by_prefix(&String::from("Го"))?;
+        assert_eq!(result, vec!["Гон", "Гор", "Гос"]);
         Ok(())
     }
 
     #[test]
     fn authors_by_last_name() -> anyhow::Result<()> {
         let api = OpdsApi::try_from(DATABASE)?;
-        let result = api.authors_by_last_name(&String::from("Стругацкий"))?;
+        let result = api
+            .authors_by_last_name(&String::from("Кейн"))?
+            .into_iter()
+            .map(|a| format!("{a}"))
+            .collect::<Vec<_>>();
+
         assert_eq!(
             result,
-            vec![
-                Author {
-                    first_name: Value::new(24, "Аркадий"),
-                    middle_name: Value::new(29, "Натанович"),
-                    last_name: Value::new(9649, "Стругацкий"),
-                },
-                Author {
-                    first_name: Value::new(126, "Борис"),
-                    middle_name: Value::new(29, "Натанович"),
-                    last_name: Value::new(9649, "Стругацкий"),
-                },
-                Author {
-                    first_name: Value::new(19, "Владимир"),
-                    middle_name: Value::new(97, "Ильич"),
-                    last_name: Value::new(9649, "Стругацкий"),
-                }
-            ]
+            vec![String::from("Адель Кейн"), String::from("Рэйчел Кейн")]
         );
         Ok(())
     }
@@ -186,23 +191,44 @@ mod tests {
     #[test]
     fn series_by_serie_name() -> anyhow::Result<()> {
         let api = OpdsApi::try_from(DATABASE)?;
-        let result = api.series_by_serie_name(&String::from("Warhammer Horror"))?;
-        assert_eq!(result, vec![Value::new(33771, "Warhammer Horror")]);
+        let result = api
+            .series_by_serie_name(&String::from("Кровь на воздух"))?
+            .into_iter()
+            .map(|a| format!("{a}"))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            result,
+            vec![String::from("Кровь на воздух [Павел Сергеевич Иевлев] (2)")]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn series_by_author_ids() -> anyhow::Result<()> {
+        let api = OpdsApi::try_from(DATABASE)?;
+        let result = api
+            .series_by_author_ids(50, 42, 281)?
+            .into_iter()
+            .map(|a| format!("{a}"))
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            result,
+            vec![String::from("Кровь на воздух [Павел Сергеевич Иевлев] (2)")]
+        );
         Ok(())
     }
 
     #[test]
     fn author_by_ids() -> anyhow::Result<()> {
         let api = OpdsApi::try_from(DATABASE)?;
-        let result = api.author_by_ids(126, 29, 9649)?;
-        assert_eq!(
-            result,
-            Some(Author {
-                first_name: Value::new(126, "Борис"),
-                middle_name: Value::new(29, "Натанович"),
-                last_name: Value::new(9649, "Стругацкий"),
-            })
-        );
+        // 56	Кровь на воздух	2	50	Павел	42	Сергеевич	281	Иевлев
+        let result = api
+            .author_by_ids(50, 42, 281)?
+            .into_iter()
+            .map(|a| format!("{a}"))
+            .collect::<Vec<_>>();
+        assert_eq!(result, vec![String::from("Павел Сергеевич Иевлев")]);
         Ok(())
     }
 }
