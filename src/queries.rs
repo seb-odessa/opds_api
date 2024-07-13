@@ -24,10 +24,11 @@ pub enum Query {
     AuthorByIds,
     BooksByAuthorIds,
     BooksBySerieId,
-    GenresMeta,
+    MetaGenres,
+    GenresByMeta,
 }
 impl Query {
-    pub const VALUES: [Self; 9] = [
+    pub const VALUES: [Self; 10] = [
         Self::AuthorNextCharByPrefix,
         Self::SerieNextCharByPrefix,
         Self::AuthorsByLastName,
@@ -36,7 +37,8 @@ impl Query {
         Self::AuthorByIds,
         Self::BooksByAuthorIds,
         Self::BooksBySerieId,
-        Self::GenresMeta,
+        Self::MetaGenres,
+        Self::GenresByMeta,
     ];
 
     pub fn get(&self) -> anyhow::Result<&'static str> {
@@ -56,7 +58,8 @@ impl Query {
             Self::AuthorByIds => Mapper::Author(map_to_author),
             Self::BooksByAuthorIds => Mapper::Book(map_to_book),
             Self::BooksBySerieId => Mapper::Book(map_to_book),
-            Self::GenresMeta => Mapper::String(map_to_string),
+            Self::MetaGenres => Mapper::String(map_to_string),
+            Self::GenresByMeta => Mapper::String(map_to_string),
         }
     }
 }
@@ -208,7 +211,8 @@ lazy_static::lazy_static! {
             ORDER BY idx, name, added COLLATE opds;
             "#
         );
-        m.insert(Query::GenresMeta,"SELECT DISTINCT meta AS value FROM genres_def ORDER BY value COLLATE opds");
+        m.insert(Query::MetaGenres,"SELECT DISTINCT meta AS value FROM genres_def ORDER BY 1 COLLATE opds");
+        m.insert(Query::GenresByMeta,"SELECT DISTINCT genre AS value FROM genres_def WHERE meta = $1 ORDER BY 1 COLLATE opds");
 
         assert_eq!(Query::VALUES.len(), m.len());
         return m;

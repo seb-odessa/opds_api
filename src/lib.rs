@@ -193,12 +193,25 @@ impl OpdsApi {
         }
     }
 
-    /// Returns genres Meta
-    pub fn genres_meta(&self) -> anyhow::Result<Vec<String>> {
-        let query = Query::GenresMeta;
+    /// Returns Metas of Genres
+    pub fn meta_genres(&self) -> anyhow::Result<Vec<String>> {
+        let query = Query::MetaGenres;
         if let Mapper::String(mapper) = Query::mapper(&query) {
             let mut statement = self.prepare(&query)?;
             let rows = statement.query([])?.mapped(mapper);
+            let res = transfrom(rows)?;
+            Ok(res)
+        } else {
+            Err(anyhow::anyhow!("Unexpected mapper"))
+        }
+    }
+
+    /// Returns genres Meta
+    pub fn genres_by_meta(&self, meta: &String) -> anyhow::Result<Vec<String>> {
+        let query = Query::GenresByMeta;
+        if let Mapper::String(mapper) = Query::mapper(&query) {
+            let mut statement = self.prepare(&query)?;
+            let rows = statement.query([meta])?.mapped(mapper);
             let res = transfrom(rows)?;
             Ok(res)
         } else {
@@ -410,10 +423,10 @@ mod tests {
     }
 
     #[test]
-    fn genres_meta() -> anyhow::Result<()> {
+    fn meta_genres() -> anyhow::Result<()> {
         let api = OpdsApi::try_from(DATABASE)?;
 
-        let strings = api.genres_meta()?;
+        let strings = api.meta_genres()?;
         let result = strings.iter().map(|a| a.as_str()).collect::<Vec<_>>();
 
         assert_eq!(
@@ -442,6 +455,27 @@ mod tests {
                 "Фольклор",
                 "Эзотерика",
                 "Юмор"
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn genres_by_meta() -> anyhow::Result<()> {
+        let api = OpdsApi::try_from(DATABASE)?;
+
+        let strings = api.genres_by_meta(&String::from("Деловая литература"))?;
+        let result = strings.iter().map(|a| a.as_str()).collect::<Vec<_>>();
+
+        assert_eq!(
+            result,
+            vec![
+                "Деловая литература",
+                "Карьера, кадры",
+                "Маркетинг, PR",
+                "Финансы",
+                "Экономика"
             ]
         );
 
