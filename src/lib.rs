@@ -105,7 +105,7 @@ impl TryFrom<&str> for OpdsApi {
 
     fn try_from(database: &str) -> anyhow::Result<Self> {
         debug!("database: {database}");
-        let conn = Connection::open(&database).inspect_err(|e| error!("{e}"))?;
+        let conn = Connection::open(database).inspect_err(|e| error!("{e}"))?;
         conn.create_collation("opds", collation::collation)?;
         Ok(Self::new(conn))
     }
