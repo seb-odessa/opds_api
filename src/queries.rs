@@ -23,6 +23,7 @@ pub enum Query {
     SeriesByAuthorIds,
     AuthorByIds,
     BooksByAuthorIds,
+    // BooksBySerieId,
 }
 impl Query {
     pub const VALUES: [Self; 7] = [
@@ -33,6 +34,7 @@ impl Query {
         Self::SeriesByAuthorIds,
         Self::AuthorByIds,
         Self::BooksByAuthorIds,
+        // Self::BooksBySerieId,
     ];
 
     pub fn get(&self) -> anyhow::Result<&'static str> {
@@ -51,6 +53,7 @@ impl Query {
             Self::SeriesByAuthorIds => Mapper::Serie(map_to_serie),
             Self::AuthorByIds => Mapper::Author(map_to_author),
             Self::BooksByAuthorIds => Mapper::Book(map_to_book),
+            // Self::BooksBySerieId => Mapper::Book(map_to_book),
         }
     }
 }
@@ -158,6 +161,9 @@ lazy_static::lazy_static! {
 				titles.value AS name,
                 series.id AS sid,
                 series_map.serie_num AS idx,
+                first_names.id AS fid, first_names.value AS fname,
+                middle_names.id AS mid, middle_names.value AS mname,
+			    last_names.id AS lid, last_names.value AS lname,
                 books.book_size AS size,
                 dates.value AS added
             FROM authors_map
@@ -166,8 +172,11 @@ lazy_static::lazy_static! {
             JOIN dates ON  books.date_id = dates.id
             LEFT JOIN series_map ON series_map.book_id = books.book_id
 		    LEFT JOIN series ON series.id = series_map.serie_id
+   		    JOIN first_names ON first_names.id = first_name_id
+		    JOIN middle_names ON middle_names.id = middle_name_id
+		    JOIN last_names ON last_names.id = last_name_id
             WHERE first_name_id = $1 AND middle_name_id = $2 AND last_name_id = $3
-            ORDER BY idx, name, added COLLATE opds;
+            ORDER BY sid, idx, name, added COLLATE opds;
             "#
         );
 
@@ -227,6 +236,7 @@ fn map_to_book(row: &Row) -> rusqlite::Result<Book> {
     let idx: Option<u32> = row.get(statement.column_index("idx")?)?;
     let size: u32 = row.get(statement.column_index("size")?)?;
     let added: String = row.get(statement.column_index("added")?)?;
+    let author = map_to_author(row)?;
 
-    Ok(Book::new(id, name, sid, idx, size, added))
+    Ok(Book::new(id, name, sid, idx, author, size, added))
 }
