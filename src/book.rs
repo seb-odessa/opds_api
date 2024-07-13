@@ -3,15 +3,24 @@ use std::fmt;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Book {
     pub id: u32,
-    pub idx: u32,
     pub name: String,
+    pub sid: Option<u32>,
+    pub idx: Option<u32>,
     pub size: u32,
     pub added: String,
 }
 impl Book {
-    pub fn new<T: Into<String>>(id: u32, idx: u32, name: T, size: u32, added: T) -> Self {
+    pub fn new<T: Into<String>>(
+        id: u32,
+        name: T,
+        sid: Option<u32>,
+        idx: Option<u32>,
+        size: u32,
+        added: T,
+    ) -> Self {
         Self {
             id,
+            sid,
             idx,
             name: name.into(),
             size,
@@ -22,8 +31,8 @@ impl Book {
 impl fmt::Display for Book {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         let size = format_size(self.size);
-        if self.idx > 0 {
-            write!(fmt, "{} {} ({}) [{size}]", self.idx, self.name, self.added)
+        if let Some(idx) = self.idx {
+            write!(fmt, "{idx} {} ({}) [{size}]", self.name, self.added)
         } else {
             write!(fmt, "{} ({}) [{size}]", self.name, self.added)
         }
@@ -58,7 +67,10 @@ mod tests {
     fn fmt() {
         assert_eq!(
             "1 A (2024-10-10) [42 B]",
-            format!("{}", &Book::new(1, 1, "A", 42, "2024-10-10"))
+            format!(
+                "{}",
+                &Book::new(1, "A", Some(42), Some(1), 42, "2024-10-10")
+            )
         );
     }
 }

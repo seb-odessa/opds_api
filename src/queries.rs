@@ -22,7 +22,7 @@ pub enum Query {
     SeriesBySerieName,
     SeriesByAuthorIds,
     AuthorByIds,
-    BooksByAuthorIdsAndSerieId,
+    BooksByAuthorIds,
 }
 impl Query {
     pub const VALUES: [Self; 7] = [
@@ -32,7 +32,7 @@ impl Query {
         Self::SeriesBySerieName,
         Self::SeriesByAuthorIds,
         Self::AuthorByIds,
-        Self::BooksByAuthorIdsAndSerieId,
+        Self::BooksByAuthorIds,
     ];
 
     pub fn get(&self) -> anyhow::Result<&'static str> {
@@ -50,7 +50,7 @@ impl Query {
             Self::SeriesBySerieName => Mapper::Serie(map_to_serie),
             Self::SeriesByAuthorIds => Mapper::Serie(map_to_serie),
             Self::AuthorByIds => Mapper::Author(map_to_author),
-            Self::BooksByAuthorIdsAndSerieId => Mapper::Book(map_to_book),
+            Self::BooksByAuthorIds => Mapper::Book(map_to_book),
         }
     }
 }
@@ -151,25 +151,25 @@ lazy_static::lazy_static! {
             "#
         );
         m.insert(
-            Query::BooksByAuthorIdsAndSerieId,
+            Query::BooksByAuthorIds,
             r#"
             SELECT
                 books.book_id AS id,
+				titles.value AS name,
+                series.id AS sid,
                 series_map.serie_num AS idx,
-                titles.value AS name,
                 books.book_size AS size,
                 dates.value AS added
             FROM authors_map
-            LEFT JOIN books ON authors_map.book_id = books.book_id
-            LEFT JOIN titles ON books.title_id = titles.id
-            LEFT JOIN series_map ON  books.book_id = series_map.book_id
-            LEFT JOIN series ON series_map.serie_id = series.id
-            LEFT JOIN dates ON  books.date_id = dates.id
-            WHERE first_name_id = $1 AND middle_name_id = $2 AND last_name_id = $3 AND series.id = $4
-            ORDER BY 2, 3, 5;
+            JOIN books ON books.book_id = authors_map.book_id
+            JOIN titles ON titles.id = books.title_id
+            JOIN dates ON  books.date_id = dates.id
+            LEFT JOIN series_map ON series_map.book_id = books.book_id
+		    LEFT JOIN series ON series.id = series_map.serie_id
+            WHERE first_name_id = $1 AND middle_name_id = $2 AND last_name_id = $3
+            ORDER BY idx, name, added COLLATE opds;
             "#
         );
-
 
         assert_eq!(Query::VALUES.len(), m.len());
         return m;
@@ -222,10 +222,11 @@ fn map_to_book(row: &Row) -> rusqlite::Result<Book> {
     let statement = row.as_ref();
 
     let id: u32 = row.get(statement.column_index("id")?)?;
-    let idx: u32 = row.get(statement.column_index("idx")?)?;
     let name: String = row.get(statement.column_index("name")?)?;
+    let sid: Option<u32> = row.get(statement.column_index("sid")?)?;
+    let idx: Option<u32> = row.get(statement.column_index("idx")?)?;
     let size: u32 = row.get(statement.column_index("size")?)?;
     let added: String = row.get(statement.column_index("added")?)?;
 
-    Ok(Book::new(id, idx, name, size, added))
+    Ok(Book::new(id, name, sid, idx, size, added))
 }

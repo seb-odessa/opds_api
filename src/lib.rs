@@ -118,6 +118,19 @@ impl OpdsApi {
         }
     }
 
+    /// Returns book by Author by ids
+    pub fn books_by_author_ids(&self, fid: u32, mid: u32, lid: u32) -> anyhow::Result<Vec<Book>> {
+        let query = Query::BooksByAuthorIds;
+        if let Mapper::Book(mapper) = Query::mapper(&query) {
+            let mut statement = self.prepare(&query)?;
+            let rows = statement.query([fid, mid, lid])?.mapped(mapper);
+            let res = transfrom(rows)?;
+            Ok(res)
+        } else {
+            Err(anyhow::anyhow!("Unexpected mapper"))
+        }
+    }
+
     /// Returns book by Author by ids and Serie id
     pub fn books_by_author_ids_and_serie_id(
         &self,
@@ -126,11 +139,41 @@ impl OpdsApi {
         lid: u32,
         sid: u32,
     ) -> anyhow::Result<Vec<Book>> {
-        let query = Query::BooksByAuthorIdsAndSerieId;
+        let query = Query::BooksByAuthorIds;
         if let Mapper::Book(mapper) = Query::mapper(&query) {
             let mut statement = self.prepare(&query)?;
-            let rows = statement.query([fid, mid, lid, sid])?.mapped(mapper);
-            let res = transfrom(rows)?;
+            let rows = statement.query([fid, mid, lid])?.mapped(mapper);
+            let res = transfrom(rows)?
+                .into_iter()
+                .filter(|book| {
+                    if let Some(serie_id) = book.sid {
+                        serie_id == sid
+                    } else {
+                        false
+                    }
+                })
+                .collect();
+            Ok(res)
+        } else {
+            Err(anyhow::anyhow!("Unexpected mapper"))
+        }
+    }
+
+    /// Returns book by Author by ids without Serie
+    pub fn books_by_author_ids_without_serie(
+        &self,
+        fid: u32,
+        mid: u32,
+        lid: u32,
+    ) -> anyhow::Result<Vec<Book>> {
+        let query = Query::BooksByAuthorIds;
+        if let Mapper::Book(mapper) = Query::mapper(&query) {
+            let mut statement = self.prepare(&query)?;
+            let rows = statement.query([fid, mid, lid])?.mapped(mapper);
+            let res = transfrom(rows)?
+                .into_iter()
+                .filter(|book| book.sid.is_none())
+                .collect();
             Ok(res)
         } else {
             Err(anyhow::anyhow!("Unexpected mapper"))
@@ -257,11 +300,11 @@ mod tests {
     }
 
     #[test]
-    fn books_by_author_ids_and_serie_id() -> anyhow::Result<()> {
+    fn books_by_author_ids() -> anyhow::Result<()> {
         let api = OpdsApi::try_from(DATABASE)?;
 
         let result = api
-            .books_by_author_ids_and_serie_id(50, 42, 281, 56)?
+            .books_by_author_ids(43, 2, 184)?
             .into_iter()
             .map(|a| format!("{a}"))
             .collect::<Vec<_>>();
@@ -269,11 +312,46 @@ mod tests {
         assert_eq!(
             result,
             vec![
-                String::from(
-                    "1 «Кровь на воздух», часть первая «Капитан-соло» (2024-06-08) [3.50 MB]"
-                ),
-                String::from("2 Пустота внутри кота (2024-06-23) [4.29 MB]")
+                String::from("День писателя (2024-06-18) [976.19 KB]"),
+                String::from("2 Хозяин мрачного замка (2024-06-05) [1.91 MB]")
             ]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn books_by_author_ids_and_serie_id() -> anyhow::Result<()> {
+        let api = OpdsApi::try_from(DATABASE)?;
+
+        let result = api
+            .books_by_author_ids_and_serie_id(43, 2, 184, 29)?
+            .into_iter()
+            .map(|a| format!("{a}"))
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            result,
+            vec![String::from(
+                "2 Хозяин мрачного замка (2024-06-05) [1.91 MB]"
+            )]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn books_by_author_ids_without_serie() -> anyhow::Result<()> {
+        let api = OpdsApi::try_from(DATABASE)?;
+
+        let result = api
+            .books_by_author_ids_without_serie(43, 2, 184)?
+            .into_iter()
+            .map(|a| format!("{a}"))
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            result,
+            vec![String::from("День писателя (2024-06-18) [976.19 KB]")]
         );
 
         Ok(())
