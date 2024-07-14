@@ -219,6 +219,19 @@ impl OpdsApi {
         }
     }
 
+    /// Returns book by Genre id and date filter
+    pub fn books_by_genre_id_and_date(&self, gid: u32, date: String) -> anyhow::Result<Vec<Book>> {
+        let query = Query::BooksByGenreIdAndDate;
+        if let Mapper::Book(mapper) = Query::mapper(&query) {
+            let mut statement = self.prepare(&query)?;
+            let rows = statement.query(params![gid, date])?.mapped(mapper);
+            let res = transfrom(rows)?;
+            Ok(res)
+        } else {
+            Err(anyhow::anyhow!("Unexpected mapper"))
+        }
+    }
+
     /// Returns Metas of Genres
     pub fn meta_genres(&self) -> anyhow::Result<Vec<String>> {
         let query = Query::MetaGenres;
@@ -389,6 +402,28 @@ mod tests {
                 "Петер Шрайнер"
             ]
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn books_by_genre_id_and_date() -> anyhow::Result<()> {
+        let api = OpdsApi::try_from(DATABASE)?;
+
+        let strings = api
+            .books_by_genre_id_and_date(24, String::from("2024-06-0%"))?
+            .into_iter()
+            .map(|a| format!("{a}"))
+            .collect::<Vec<_>>();
+
+        let result = strings.iter().map(|a| a.as_str()).collect::<Vec<_>>();
+
+        assert_eq!(
+            result,
+            vec![
+                "Игра королев. Женщины, которые изменили историю Европы - Сара Гриствуд (2024-06-07) [2.67 MB]",
+                "Рыцари, закованные в сталь - Говард Пайл (2024-06-01) [2.46 MB]"
+            ]);
 
         Ok(())
     }

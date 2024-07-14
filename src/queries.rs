@@ -28,9 +28,10 @@ pub enum Query {
     MetaGenres,
     GenresByMeta,
     AuthorsByGenreId,
+    BooksByGenreIdAndDate,
 }
 impl Query {
-    pub const VALUES: [Self; 12] = [
+    pub const VALUES: [Self; 13] = [
         Self::AuthorNextCharByPrefix,
         Self::SerieNextCharByPrefix,
         Self::AuthorsByLastName,
@@ -43,6 +44,7 @@ impl Query {
         Self::GenresByMeta,
         Self::SeriesByGenreId,
         Self::AuthorsByGenreId,
+        Self::BooksByGenreIdAndDate,
     ];
 
     pub fn get(&self) -> anyhow::Result<&'static str> {
@@ -57,16 +59,17 @@ impl Query {
             Self::AuthorNextCharByPrefix => Mapper::String(map_to_string),
             Self::SerieNextCharByPrefix => Mapper::String(map_to_string),
 
-            Self::AuthorsByLastName => Mapper::Author(map_to_author),
             Self::AuthorByIds => Mapper::Author(map_to_author),
             Self::AuthorsByGenreId => Mapper::Author(map_to_author),
+            Self::AuthorsByLastName => Mapper::Author(map_to_author),
 
+            Self::SeriesByGenreId => Mapper::Serie(map_to_serie),
             Self::SeriesBySerieName => Mapper::Serie(map_to_serie),
             Self::SeriesByAuthorIds => Mapper::Serie(map_to_serie),
-            Self::SeriesByGenreId => Mapper::Serie(map_to_serie),
 
-            Self::BooksByAuthorIds => Mapper::Book(map_to_book),
             Self::BooksBySerieId => Mapper::Book(map_to_book),
+            Self::BooksByAuthorIds => Mapper::Book(map_to_book),
+            Self::BooksByGenreIdAndDate => Mapper::Book(map_to_book),
 
             Self::MetaGenres => Mapper::String(map_to_string),
             Self::GenresByMeta => Mapper::Value(map_to_value),
@@ -78,8 +81,7 @@ lazy_static::lazy_static! {
     static ref MAP: HashMap<Query, &'static str> = {
         let mut m = HashMap::new();
         m.insert(
-            Query::AuthorNextCharByPrefix,
-            r#"
+            Query::AuthorNextCharByPrefix, r#"
             SELECT DISTINCT substr(value, 1, $1) AS value
             FROM last_names WHERE value LIKE $2 || '%'
             ORDER BY 1
@@ -87,8 +89,7 @@ lazy_static::lazy_static! {
             "#
         );
         m.insert(
-            Query::SerieNextCharByPrefix,
-            r#"
+            Query::SerieNextCharByPrefix, r#"
             SELECT DISTINCT substr(value, 1, $1) AS value
             FROM series WHERE value LIKE $2 || '%'
             ORDER BY 1
@@ -96,8 +97,7 @@ lazy_static::lazy_static! {
             "#
         );
         m.insert(
-            Query::AuthorsByLastName,
-            r#"
+            Query::AuthorsByLastName, r#"
             WITH last_name(fid, mid, lid, value) AS (
                 SELECT DISTINCT first_name_id, middle_name_id, id, value
 			    FROM last_names LEFT JOIN authors_map ON authors_map.last_name_id = id
@@ -115,8 +115,7 @@ lazy_static::lazy_static! {
             "#
         );
         m.insert(
-            Query::SeriesBySerieName,
-            r#"
+            Query::SeriesBySerieName, r#"
             SELECT
                 series.id AS id,
                 series.value AS name,
@@ -138,8 +137,7 @@ lazy_static::lazy_static! {
             "#
         );
         m.insert(
-            Query::SeriesByAuthorIds,
-            r#"
+            Query::SeriesByAuthorIds, r#"
            	SELECT
                 series.id AS id,
                 series.value AS name,
@@ -161,8 +159,7 @@ lazy_static::lazy_static! {
             "#
         );
         m.insert(
-            Query::SeriesByGenreId,
-            r#"
+            Query::SeriesByGenreId, r#"
            	WITH books(id) AS (
                 SELECT book_id FROM genres_map WHERE genre_id = $1
             )
@@ -205,6 +202,36 @@ lazy_static::lazy_static! {
             "#
         );
         m.insert(
+            Query::BooksByGenreIdAndDate, r#"
+           	WITH remained(id) AS (
+                SELECT book_id FROM genres_map WHERE genre_id = $1
+            )
+            SELECT
+                books.book_id AS id,
+				titles.value AS name,
+                series.id AS sid,
+                series_map.serie_num AS idx,
+                first_names.id AS fid, first_names.value AS fname,
+                middle_names.id AS mid, middle_names.value AS mname,
+			    last_names.id AS lid, last_names.value AS lname,
+                books.book_size AS size,
+                dates.value AS added
+            FROM remained
+			JOIN books ON books.book_id = remained.id
+            JOIN titles ON titles.id = books.title_id
+            LEFT JOIN series_map ON series_map.book_id = remained.id
+		    LEFT JOIN series ON series.id = series_map.serie_id
+			JOIN authors_map ON authors_map.book_id = remained.id
+   		    JOIN first_names ON first_names.id = first_name_id
+		    JOIN middle_names ON middle_names.id = middle_name_id
+		    JOIN last_names ON last_names.id = last_name_id
+			JOIN dates ON  dates.id = books.date_id
+			WHERE dates.value LIKE $2
+            ORDER BY sid, idx, name, added
+            COLLATE opds;
+            "#
+        );
+        m.insert(
             Query::AuthorByIds,
             r#"
             SELECT
@@ -216,8 +243,7 @@ lazy_static::lazy_static! {
             "#
         );
         m.insert(
-            Query::BooksByAuthorIds,
-            r#"
+            Query::BooksByAuthorIds, r#"
             SELECT
                 books.book_id AS id,
 				titles.value AS name,
@@ -243,8 +269,7 @@ lazy_static::lazy_static! {
             "#
         );
         m.insert(
-            Query::BooksBySerieId,
-            r#"
+            Query::BooksBySerieId, r#"
             SELECT
                 books.book_id AS id,
 				titles.value AS name,
@@ -269,12 +294,13 @@ lazy_static::lazy_static! {
             COLLATE opds;
             "#
         );
-        m.insert(Query::MetaGenres,"SELECT DISTINCT meta AS value FROM genres_def ORDER BY 1 COLLATE opds");
+        m.insert(Query::MetaGenres,
+            "SELECT DISTINCT meta AS value FROM genres_def ORDER BY value COLLATE opds"
+        );
         m.insert(Query::GenresByMeta,r#"
             SELECT genres.id AS id, genre AS value
             FROM genres_def JOIN genres ON genres.value = genres_def.code
-            WHERE meta = $1 ORDER BY value
-            COLLATE opds;
+            WHERE meta = $1 ORDER BY value COLLATE opds;
             "#
         );
 
