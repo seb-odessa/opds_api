@@ -80,7 +80,7 @@ impl OpdsApi {
     }
 
     /// Returns Authors by Genre name
-    pub fn authors_by_genre_id(&self, gid: &u32) -> anyhow::Result<Vec<Author>> {
+    pub fn authors_by_genre_id(&self, gid: u32) -> anyhow::Result<Vec<Author>> {
         let query = Query::AuthorsByGenreId;
         if let Mapper::Author(mapper) = Query::mapper(&query) {
             let mut statement = self.prepare(&query)?;
@@ -106,7 +106,7 @@ impl OpdsApi {
     }
 
     /// Returns Series by Genre name
-    pub fn series_by_genre_id(&self, gid: &u32) -> anyhow::Result<Vec<Serie>> {
+    pub fn series_by_genre_id(&self, gid: u32) -> anyhow::Result<Vec<Serie>> {
         let query = Query::SeriesByGenreId;
         if let Mapper::Serie(mapper) = Query::mapper(&query) {
             let mut statement = self.prepare(&query)?;
@@ -353,7 +353,7 @@ mod tests {
     fn series_by_genre_id() -> anyhow::Result<()> {
         let api = OpdsApi::try_from(DATABASE)?;
         let strings = api
-            .series_by_genre_id(&24)?
+            .series_by_genre_id(24)?
             .into_iter()
             .map(|a| format!("{a}"))
             .collect::<Vec<_>>();
@@ -375,7 +375,7 @@ mod tests {
         let api = OpdsApi::try_from(DATABASE)?;
 
         let strings = api
-            .authors_by_genre_id(&24)?
+            .authors_by_genre_id(24)?
             .into_iter()
             .map(|a| format!("{a}"))
             .collect::<Vec<_>>();
