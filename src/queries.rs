@@ -84,7 +84,7 @@ lazy_static::lazy_static! {
             Query::AuthorNextCharByPrefix, r#"
             SELECT DISTINCT substr(value, 1, $1) AS value
             FROM last_names WHERE value LIKE $2 || '%'
-            ORDER BY 1
+            ORDER BY value
             COLLATE opds;
             "#
         );
@@ -92,7 +92,7 @@ lazy_static::lazy_static! {
             Query::SerieNextCharByPrefix, r#"
             SELECT DISTINCT substr(value, 1, $1) AS value
             FROM series WHERE value LIKE $2 || '%'
-            ORDER BY 1
+            ORDER BY value
             COLLATE opds;
             "#
         );
@@ -110,7 +110,7 @@ lazy_static::lazy_static! {
 			FROM last_name
             JOIN middle_names ON middle_names.id = mid
             JOIN first_names ON first_names.id = fid
-            ORDER BY 6, 2, 4
+            ORDER BY lname, fname, mname
             COLLATE opds;
             "#
         );
@@ -132,7 +132,7 @@ lazy_static::lazy_static! {
 		    JOIN last_names ON last_names.id = last_name_id
             WHERE series.value = $1 AND name IS NOT NULL
             GROUP BY 1, 4, 6, 8
-		    ORDER BY 6, 4, 5
+		    ORDER BY name, lname, fname, mname
             COLLATE opds;
             "#
         );
@@ -154,13 +154,13 @@ lazy_static::lazy_static! {
 		    JOIN last_names ON last_names.id = last_name_id
             WHERE first_name_id = $1 AND middle_name_id = $2 AND last_name_id = $3 AND name IS NOT NULL
             GROUP BY 1
-		    ORDER BY 6, 4, 5
+		    ORDER BY name, lname, fname, mname
             COLLATE opds;
             "#
         );
         m.insert(
             Query::SeriesByGenreId, r#"
-           	WITH books(id) AS (
+           	WITH accepted(id) AS (
                 SELECT book_id FROM genres_map WHERE genre_id = $1
             )
             SELECT
@@ -170,40 +170,40 @@ lazy_static::lazy_static! {
 			    first_names.id AS fid, first_names.value AS fname,
                 middle_names.id AS mid, middle_names.value AS mname,
 			    last_names.id AS lid, last_names.value AS lname
-            FROM books
-            JOIN series_map ON series_map.book_id = books.id
+            FROM accepted
+            JOIN series_map ON series_map.book_id = accepted.id
             JOIN series ON series.id = series_map.serie_id
-		    JOIN authors_map ON authors_map.book_id = books.id
+		    JOIN authors_map ON authors_map.book_id = accepted.id
 		    JOIN first_names ON first_names.id = first_name_id
 		    JOIN middle_names ON middle_names.id = middle_name_id
 		    JOIN last_names ON last_names.id = last_name_id
 
             WHERE series.value IS NOT NULL
             GROUP BY 1, 4, 6, 8
-		    ORDER by 2
+		    ORDER BY name, lname, fname, mname
             COLLATE opds;
             "#
         );
         m.insert(Query::AuthorsByGenreId, r#"
-            WITH books(id) AS (
+            WITH accepted(id) AS (
                 SELECT book_id FROM genres_map WHERE genre_id = $1
             )
             SELECT DISTINCT
   	            first_names.id AS fid, first_names.value AS fname,
                 middle_names.id AS mid, middle_names.value AS mname,
 			    last_names.id AS lid, last_names.value AS lname
-			FROM books
-			JOIN authors_map ON authors_map.book_id = books.id
+			FROM accepted
+			JOIN authors_map ON authors_map.book_id = accepted.id
 			JOIN first_names ON first_names.id = authors_map.first_name_id
 			JOIN middle_names ON middle_names.id = authors_map.middle_name_id
 			JOIN last_names ON last_names.id = authors_map.last_name_id
-            ORDER BY 6, 2, 4
+            ORDER BY lname, fname, mname
             COLLATE opds;
             "#
         );
         m.insert(
             Query::BooksByGenreIdAndDate, r#"
-           	WITH remained(id) AS (
+           	WITH accepted(id) AS (
                 SELECT book_id FROM genres_map WHERE genre_id = $1
             )
             SELECT
@@ -216,12 +216,12 @@ lazy_static::lazy_static! {
 			    last_names.id AS lid, last_names.value AS lname,
                 books.book_size AS size,
                 dates.value AS added
-            FROM remained
-			JOIN books ON books.book_id = remained.id
+            FROM accepted
+			JOIN books ON books.book_id = accepted.id
             JOIN titles ON titles.id = books.title_id
-            LEFT JOIN series_map ON series_map.book_id = remained.id
+            LEFT JOIN series_map ON series_map.book_id = accepted.id
 		    LEFT JOIN series ON series.id = series_map.serie_id
-			JOIN authors_map ON authors_map.book_id = remained.id
+			JOIN authors_map ON authors_map.book_id = accepted.id
    		    JOIN first_names ON first_names.id = first_name_id
 		    JOIN middle_names ON middle_names.id = middle_name_id
 		    JOIN last_names ON last_names.id = last_name_id
