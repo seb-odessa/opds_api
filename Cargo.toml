@@ -1,6 +1,6 @@
 [package]
 name = "opds_db_api"
-version = "1.0.5"
+version = "1.0.6"
 edition = "2021"
 
 [lib]
@@ -9,7 +9,7 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow = "1.0"
-rusqlite = { version = "0.31.0", features = ["collation"]}
+rusqlite = { version = "0.31.0", features = ["bundled", "collation", "vtab", "array"]}
 log = "0.4"
 env_logger = "0.11"
 lazy_static = { version = "1.5.0" }

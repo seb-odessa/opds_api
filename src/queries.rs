@@ -29,9 +29,10 @@ pub enum Query {
     GenresByMeta,
     AuthorsByGenreId,
     BooksByGenreIdAndDate,
+    AuthorsByBooksIds,
 }
 impl Query {
-    pub const VALUES: [Self; 13] = [
+    pub const VALUES: [Self; 14] = [
         Self::AuthorNextCharByPrefix,
         Self::SerieNextCharByPrefix,
         Self::AuthorsByLastName,
@@ -45,6 +46,7 @@ impl Query {
         Self::SeriesByGenreId,
         Self::AuthorsByGenreId,
         Self::BooksByGenreIdAndDate,
+        Self::AuthorsByBooksIds,
     ];
 
     pub fn get(&self) -> anyhow::Result<&'static str> {
@@ -62,6 +64,7 @@ impl Query {
             Self::AuthorByIds => Mapper::Author(map_to_author),
             Self::AuthorsByGenreId => Mapper::Author(map_to_author),
             Self::AuthorsByLastName => Mapper::Author(map_to_author),
+            Self::AuthorsByBooksIds => Mapper::Author(map_to_author),
 
             Self::SeriesByGenreId => Mapper::Serie(map_to_serie),
             Self::SeriesBySerieName => Mapper::Serie(map_to_serie),
@@ -84,16 +87,14 @@ lazy_static::lazy_static! {
             Query::AuthorNextCharByPrefix, r#"
             SELECT DISTINCT substr(value, 1, $1) AS value
             FROM last_names WHERE value LIKE $2 || '%'
-            ORDER BY value
-            COLLATE opds;
+            ORDER BY value COLLATE opds;
             "#
         );
         m.insert(
             Query::SerieNextCharByPrefix, r#"
             SELECT DISTINCT substr(value, 1, $1) AS value
             FROM series WHERE value LIKE $2 || '%'
-            ORDER BY value
-            COLLATE opds;
+            ORDER BY value COLLATE opds;
             "#
         );
         m.insert(
@@ -110,8 +111,21 @@ lazy_static::lazy_static! {
 			FROM last_name
             JOIN middle_names ON middle_names.id = mid
             JOIN first_names ON first_names.id = fid
-            ORDER BY lname, fname, mname
-            COLLATE opds;
+            ORDER BY lname, fname, mname COLLATE opds;
+            "#
+        );
+        m.insert(
+            Query::AuthorsByBooksIds, r#"
+            SELECT DISTINCT
+  	            first_names.id AS fid, first_names.value AS fname,
+                middle_names.id AS mid, middle_names.value AS mname,
+			    last_names.id AS lid, last_names.value AS lname
+			FROM authors_map
+			JOIN first_names ON first_names.id = authors_map.first_name_id
+			JOIN middle_names ON middle_names.id = authors_map.middle_name_id
+			JOIN last_names ON last_names.id = authors_map.last_name_id
+			WHERE authors_map.book_id IN rarray($1)
+            ORDER BY lname, fname, mname  COLLATE opds;
             "#
         );
         m.insert(
@@ -132,8 +146,7 @@ lazy_static::lazy_static! {
 		    JOIN last_names ON last_names.id = last_name_id
             WHERE series.value = $1 AND name IS NOT NULL
             GROUP BY 1, 4, 6, 8
-		    ORDER BY name, lname, fname, mname
-            COLLATE opds;
+		    ORDER BY name, lname, fname, mname COLLATE opds;
             "#
         );
         m.insert(
@@ -154,8 +167,7 @@ lazy_static::lazy_static! {
 		    JOIN last_names ON last_names.id = last_name_id
             WHERE first_name_id = $1 AND middle_name_id = $2 AND last_name_id = $3 AND name IS NOT NULL
             GROUP BY 1
-		    ORDER BY name, lname, fname, mname
-            COLLATE opds;
+		    ORDER BY name, lname, fname, mname COLLATE opds;
             "#
         );
         m.insert(
@@ -180,8 +192,7 @@ lazy_static::lazy_static! {
 
             WHERE series.value IS NOT NULL
             GROUP BY 1, 4, 6, 8
-		    ORDER BY name, lname, fname, mname
-            COLLATE opds;
+		    ORDER BY name, lname, fname, mname COLLATE opds;
             "#
         );
         m.insert(Query::AuthorsByGenreId, r#"
@@ -197,8 +208,7 @@ lazy_static::lazy_static! {
 			JOIN first_names ON first_names.id = authors_map.first_name_id
 			JOIN middle_names ON middle_names.id = authors_map.middle_name_id
 			JOIN last_names ON last_names.id = authors_map.last_name_id
-            ORDER BY lname, fname, mname
-            COLLATE opds;
+            ORDER BY lname, fname, mname COLLATE opds;
             "#
         );
         m.insert(
@@ -227,8 +237,7 @@ lazy_static::lazy_static! {
 		    JOIN last_names ON last_names.id = last_name_id
 			JOIN dates ON  dates.id = books.date_id
 			WHERE dates.value LIKE $2
-            ORDER BY sid, idx, name, added
-            COLLATE opds;
+            ORDER BY sid, idx, name, added COLLATE opds;
             "#
         );
         m.insert(
@@ -264,8 +273,7 @@ lazy_static::lazy_static! {
 		    JOIN middle_names ON middle_names.id = middle_name_id
 		    JOIN last_names ON last_names.id = last_name_id
             WHERE first_name_id = $1 AND middle_name_id = $2 AND last_name_id = $3
-            ORDER BY sid, idx, name, added
-            COLLATE opds;
+            ORDER BY sid, idx, name, added COLLATE opds;
             "#
         );
         m.insert(
@@ -290,8 +298,7 @@ lazy_static::lazy_static! {
 		    JOIN middle_names ON middle_names.id = middle_name_id
 		    JOIN last_names ON last_names.id = last_name_id
             WHERE series.id = $1
-            ORDER BY idx, name, added
-            COLLATE opds;
+            ORDER BY idx, name, added COLLATE opds;
             "#
         );
         m.insert(Query::MetaGenres,

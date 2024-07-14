@@ -2,7 +2,7 @@ use log::{debug, error};
 use queries::{Mapper, Query};
 use rusqlite::{params, CachedStatement, Connection};
 
-use std::convert::TryFrom;
+use std::{convert::TryFrom, rc::Rc};
 
 pub use author::Author;
 pub use book::Book;
@@ -85,6 +85,21 @@ impl OpdsApi {
         if let Mapper::Author(mapper) = Query::mapper(&query) {
             let mut statement = self.prepare(&query)?;
             let rows = statement.query([gid])?.mapped(mapper);
+            let res = transfrom(rows)?;
+            Ok(res)
+        } else {
+            Err(anyhow::anyhow!("Unexpected mapper"))
+        }
+    }
+
+    /// Returns Authors by Genre name
+    pub fn authors_by_books_ids(&self, ids: Vec<u32>) -> anyhow::Result<Vec<Author>> {
+        use rusqlite::types::Value;
+        let query = Query::AuthorsByBooksIds;
+        if let Mapper::Author(mapper) = Query::mapper(&query) {
+            let mut statement = self.prepare(&query)?;
+            let params = Rc::new(ids.into_iter().map(Value::from).collect::<Vec<Value>>());
+            let rows = statement.query(params![params])?.mapped(mapper);
             let res = transfrom(rows)?;
             Ok(res)
         } else {
@@ -266,6 +281,7 @@ impl TryFrom<&str> for OpdsApi {
         debug!("database: {database}");
         let conn = Connection::open(database).inspect_err(|e| error!("{e}"))?;
         conn.create_collation("opds", collation::collation)?;
+        rusqlite::vtab::array::load_module(&conn)?;
         Ok(Self::new(conn))
     }
 }
@@ -535,6 +551,31 @@ mod tests {
         assert_eq!(
             result,
             vec!["2 Хозяин мрачного замка - Анна Велес (2024-06-05) [1.91 MB]"]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn authors_by_books_ids() -> anyhow::Result<()> {
+        let api = OpdsApi::try_from(DATABASE)?;
+
+        let strings = api
+            .authors_by_books_ids(vec![768409, 768571, 768746, 768750])?
+            .into_iter()
+            .map(|a| format!("{a}"))
+            .collect::<Vec<_>>();
+
+        let result = strings.iter().map(|a| a.as_str()).collect::<Vec<_>>();
+
+        assert_eq!(
+            result,
+            vec![
+                "Анатолий Сергеевич Бернацкий",
+                "Сара Гриствуд",
+                "Александр Викторович Марков",
+                "Говард Пайл"
+            ]
         );
 
         Ok(())
