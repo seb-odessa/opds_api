@@ -188,7 +188,7 @@ lazy_static::lazy_static! {
             WITH books(id) AS (
                 SELECT book_id FROM genres_map WHERE genre_id = $1
             )
-            SELECT
+            SELECT DISTINCT
   	            first_names.id AS fid, first_names.value AS fname,
                 middle_names.id AS mid, middle_names.value AS mname,
 			    last_names.id AS lid, last_names.value AS lname
