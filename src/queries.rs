@@ -21,15 +21,16 @@ pub enum Query {
     AuthorsByLastName,
     SeriesBySerieName,
     SeriesByAuthorIds,
-    SeriesByGenre,
+    SeriesByGenreId,
     AuthorByIds,
     BooksByAuthorIds,
     BooksBySerieId,
     MetaGenres,
     GenresByMeta,
+    AuthorsByGenreId,
 }
 impl Query {
-    pub const VALUES: [Self; 11] = [
+    pub const VALUES: [Self; 12] = [
         Self::AuthorNextCharByPrefix,
         Self::SerieNextCharByPrefix,
         Self::AuthorsByLastName,
@@ -40,8 +41,8 @@ impl Query {
         Self::BooksBySerieId,
         Self::MetaGenres,
         Self::GenresByMeta,
-        Self::SeriesByGenre,
-
+        Self::SeriesByGenreId,
+        Self::AuthorsByGenreId,
     ];
 
     pub fn get(&self) -> anyhow::Result<&'static str> {
@@ -58,16 +59,17 @@ impl Query {
 
             Self::AuthorsByLastName => Mapper::Author(map_to_author),
             Self::AuthorByIds => Mapper::Author(map_to_author),
+            Self::AuthorsByGenreId => Mapper::Author(map_to_author),
 
             Self::SeriesBySerieName => Mapper::Serie(map_to_serie),
             Self::SeriesByAuthorIds => Mapper::Serie(map_to_serie),
-            Self::SeriesByGenre => Mapper::Serie(map_to_serie),
+            Self::SeriesByGenreId => Mapper::Serie(map_to_serie),
 
             Self::BooksByAuthorIds => Mapper::Book(map_to_book),
             Self::BooksBySerieId => Mapper::Book(map_to_book),
 
             Self::MetaGenres => Mapper::String(map_to_string),
-            Self::GenresByMeta => Mapper::String(map_to_string),
+            Self::GenresByMeta => Mapper::Value(map_to_value),
         }
     }
 }
@@ -131,7 +133,8 @@ lazy_static::lazy_static! {
 		    JOIN last_names ON last_names.id = last_name_id
             WHERE series.value = $1 AND name IS NOT NULL
             GROUP BY 1, 4, 6, 8
-		    ORDER BY 6, 4, 5 COLLATE opds;
+		    ORDER BY 6, 4, 5
+            COLLATE opds;
             "#
         );
         m.insert(
@@ -153,14 +156,15 @@ lazy_static::lazy_static! {
 		    JOIN last_names ON last_names.id = last_name_id
             WHERE first_name_id = $1 AND middle_name_id = $2 AND last_name_id = $3 AND name IS NOT NULL
             GROUP BY 1
-		    ORDER BY 6, 4, 5 COLLATE opds;
+		    ORDER BY 6, 4, 5
+            COLLATE opds;
             "#
         );
         m.insert(
-            Query::SeriesByGenre,
+            Query::SeriesByGenreId,
             r#"
-           	WITH genre_codes(id, value) AS (
-                SELECT id, code FROM genres_def LEFT JOIN genres WHERE genre = $1 AND value = code
+           	WITH books(id) AS (
+                SELECT book_id FROM genres_map WHERE genre_id = $1
             )
             SELECT
 			    series.id AS id,
@@ -169,17 +173,35 @@ lazy_static::lazy_static! {
 			    first_names.id AS fid, first_names.value AS fname,
                 middle_names.id AS mid, middle_names.value AS mname,
 			    last_names.id AS lid, last_names.value AS lname
-            FROM genre_codes
-            LEFT JOIN genres_map ON genres_map.genre_id = genre_codes.id
-            LEFT JOIN series_map ON series_map.book_id = genres_map.book_id
-            LEFT JOIN series ON series.id = series_map.serie_id
-		    JOIN authors_map ON authors_map.book_id = genres_map.book_id
+            FROM books
+            JOIN series_map ON series_map.book_id = books.id
+            JOIN series ON series.id = series_map.serie_id
+		    JOIN authors_map ON authors_map.book_id = books.id
 		    JOIN first_names ON first_names.id = first_name_id
 		    JOIN middle_names ON middle_names.id = middle_name_id
 		    JOIN last_names ON last_names.id = last_name_id
+
             WHERE series.value IS NOT NULL
             GROUP BY 1, 4, 6, 8
-		    ORDER by 2 COLLATE opds;
+		    ORDER by 2
+            COLLATE opds;
+            "#
+        );
+        m.insert(Query::AuthorsByGenreId, r#"
+            WITH books(id) AS (
+                SELECT book_id FROM genres_map WHERE genre_id = $1
+            )
+            SELECT
+  	            first_names.id AS fid, first_names.value AS fname,
+                middle_names.id AS mid, middle_names.value AS mname,
+			    last_names.id AS lid, last_names.value AS lname
+			FROM books
+			JOIN authors_map ON authors_map.book_id = books.id
+			JOIN first_names ON first_names.id = authors_map.first_name_id
+			JOIN middle_names ON middle_names.id = authors_map.middle_name_id
+			JOIN last_names ON last_names.id = authors_map.last_name_id
+            ORDER BY 6, 2, 4
+            COLLATE opds;
             "#
         );
         m.insert(
@@ -216,7 +238,8 @@ lazy_static::lazy_static! {
 		    JOIN middle_names ON middle_names.id = middle_name_id
 		    JOIN last_names ON last_names.id = last_name_id
             WHERE first_name_id = $1 AND middle_name_id = $2 AND last_name_id = $3
-            ORDER BY sid, idx, name, added COLLATE opds;
+            ORDER BY sid, idx, name, added
+            COLLATE opds;
             "#
         );
         m.insert(
@@ -242,11 +265,18 @@ lazy_static::lazy_static! {
 		    JOIN middle_names ON middle_names.id = middle_name_id
 		    JOIN last_names ON last_names.id = last_name_id
             WHERE series.id = $1
-            ORDER BY idx, name, added COLLATE opds;
+            ORDER BY idx, name, added
+            COLLATE opds;
             "#
         );
         m.insert(Query::MetaGenres,"SELECT DISTINCT meta AS value FROM genres_def ORDER BY 1 COLLATE opds");
-        m.insert(Query::GenresByMeta,"SELECT DISTINCT genre AS value FROM genres_def WHERE meta = $1 ORDER BY 1 COLLATE opds");
+        m.insert(Query::GenresByMeta,r#"
+            SELECT genres.id AS id, genre AS value
+            FROM genres_def JOIN genres ON genres.value = genres_def.code
+            WHERE meta = $1 ORDER BY value
+            COLLATE opds;
+            "#
+        );
 
         assert_eq!(Query::VALUES.len(), m.len());
         return m;
@@ -258,12 +288,12 @@ fn map_to_string(row: &Row) -> rusqlite::Result<String> {
     row.get(statement.column_index("value")?)
 }
 
-// fn map_to_value(row: &Row) -> rusqlite::Result<Value> {
-//     let statement = row.as_ref();
-//     let id: u32 = row.get(statement.column_index("id")?)?;
-//     let value: String = row.get(statement.column_index("value")?)?;
-//     Ok(Value::new(id, value))
-// }
+fn map_to_value(row: &Row) -> rusqlite::Result<Value> {
+    let statement = row.as_ref();
+    let id: u32 = row.get(statement.column_index("id")?)?;
+    let value: String = row.get(statement.column_index("value")?)?;
+    Ok(Value::new(id, value))
+}
 
 fn map_to_author(row: &Row) -> rusqlite::Result<Author> {
     let statement = row.as_ref();

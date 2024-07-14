@@ -13,6 +13,17 @@ impl Value {
         }
     }
 }
+impl From<(u32, String)> for Value {
+    fn from((id, value): (u32, String)) -> Self {
+        Self::new(id, value)
+    }
+}
+impl From<(u32, &str)> for Value {
+    fn from((id, value): (u32, &str)) -> Self {
+        Self::new(id, value)
+    }
+}
+
 impl fmt::Display for Value {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(&self.value)

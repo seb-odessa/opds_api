@@ -79,6 +79,19 @@ impl OpdsApi {
         }
     }
 
+    /// Returns Authors by Genre name
+    pub fn authors_by_genre_id(&self, gid: &u32) -> anyhow::Result<Vec<Author>> {
+        let query = Query::AuthorsByGenreId;
+        if let Mapper::Author(mapper) = Query::mapper(&query) {
+            let mut statement = self.prepare(&query)?;
+            let rows = statement.query([gid])?.mapped(mapper);
+            let res = transfrom(rows)?;
+            Ok(res)
+        } else {
+            Err(anyhow::anyhow!("Unexpected mapper"))
+        }
+    }
+
     /// Returns Series by exact serie name
     pub fn series_by_serie_name(&self, name: &String) -> anyhow::Result<Vec<Serie>> {
         let query = Query::SeriesBySerieName;
@@ -93,11 +106,11 @@ impl OpdsApi {
     }
 
     /// Returns Series by Genre name
-    pub fn series_by_genre(&self, name: &String) -> anyhow::Result<Vec<Serie>> {
-        let query = Query::SeriesByGenre;
+    pub fn series_by_genre_id(&self, gid: &u32) -> anyhow::Result<Vec<Serie>> {
+        let query = Query::SeriesByGenreId;
         if let Mapper::Serie(mapper) = Query::mapper(&query) {
             let mut statement = self.prepare(&query)?;
-            let rows = statement.query([name])?.mapped(mapper);
+            let rows = statement.query([gid])?.mapped(mapper);
             let res = transfrom(rows)?;
             Ok(res)
         } else {
@@ -220,9 +233,9 @@ impl OpdsApi {
     }
 
     /// Returns genres Meta
-    pub fn genres_by_meta(&self, meta: &String) -> anyhow::Result<Vec<String>> {
+    pub fn genres_by_meta(&self, meta: &String) -> anyhow::Result<Vec<Value>> {
         let query = Query::GenresByMeta;
-        if let Mapper::String(mapper) = Query::mapper(&query) {
+        if let Mapper::Value(mapper) = Query::mapper(&query) {
             let mut statement = self.prepare(&query)?;
             let rows = statement.query([meta])?.mapped(mapper);
             let res = transfrom(rows)?;
@@ -324,10 +337,10 @@ mod tests {
     }
 
     #[test]
-    fn series_by_genre() -> anyhow::Result<()> {
+    fn series_by_genre_id() -> anyhow::Result<()> {
         let api = OpdsApi::try_from(DATABASE)?;
         let strings = api
-            .series_by_genre(&String::from("Исторические приключения"))?
+            .series_by_genre_id(&24)?
             .into_iter()
             .map(|a| format!("{a}"))
             .collect::<Vec<_>>();
@@ -341,6 +354,42 @@ mod tests {
                 "Восток (РИПОЛ) [Владимир Вячеславович Малявин] (1)"
             ]
         );
+        Ok(())
+    }
+
+    #[test]
+    fn authors_by_genre_id() -> anyhow::Result<()> {
+        let api = OpdsApi::try_from(DATABASE)?;
+
+        let strings = api
+            .authors_by_genre_id(&24)?
+            .into_iter()
+            .map(|a| format!("{a}"))
+            .collect::<Vec<_>>();
+
+        let result = strings.iter().map(|a| a.as_str()).collect::<Vec<_>>();
+
+        assert_eq!(
+            result,
+            vec![
+                "Дмитрий Михайлович Балашов",
+                "Анатолий Сергеевич Бернацкий",
+                "Александр Владимирович Волков",
+                "Сергей Михайлович Голицын",
+                "Сара Гриствуд",
+                "Александр Владимирович Мазин",
+                "Владимир Вячеславович Малявин",
+                "Александр Викторович Марков",
+                "Лев Карлосович Масиель Санчес",
+                "Говард Пайл",
+                "Джеймс Перкинс",
+                "Джордж Сартон",
+                "Евгений Викторович Старшов",
+                "Дон Холлуэй",
+                "Петер Шрайнер"
+            ]
+        );
+
         Ok(())
     }
 
@@ -499,18 +548,19 @@ mod tests {
     fn genres_by_meta() -> anyhow::Result<()> {
         let api = OpdsApi::try_from(DATABASE)?;
 
-        let strings = api.genres_by_meta(&String::from("Деловая литература"))?;
-        let result = strings.iter().map(|a| a.as_str()).collect::<Vec<_>>();
+        let result = api.genres_by_meta(&String::from("Деловая литература"))?;
 
         assert_eq!(
             result,
             vec![
-                "Деловая литература",
-                "Карьера, кадры",
-                "Маркетинг, PR",
-                "Финансы",
-                "Экономика"
+                (47, "Карьера, кадры"),
+                (44, "Маркетинг, PR"),
+                (48, "Финансы"),
+                (120, "Экономика")
             ]
+            .into_iter()
+            .map(|(id, value)| Value::new(id, value))
+            .collect::<Vec<Value>>()
         );
 
         Ok(())
