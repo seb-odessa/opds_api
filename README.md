@@ -1,1 +1,1 @@
-# opds_db_api
+# opds_api

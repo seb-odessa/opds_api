@@ -1,5 +1,5 @@
 [package]
-name = "opds_db_api"
+name = "opds_api"
 version = "1.0.6"
 edition = "2021"
 
