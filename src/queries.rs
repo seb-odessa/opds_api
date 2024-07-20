@@ -86,14 +86,14 @@ lazy_static::lazy_static! {
         m.insert(
             Query::AuthorNextCharByPrefix, r#"
             SELECT DISTINCT substr(value, 1, $1) AS value
-            FROM last_names WHERE value LIKE $2 || '%'
+            FROM last_names WHERE LOWER(value) LIKE LOWER($2) || '%'
             ORDER BY value COLLATE opds;
             "#
         );
         m.insert(
             Query::SerieNextCharByPrefix, r#"
             SELECT DISTINCT substr(value, 1, $1) AS value
-            FROM series WHERE value LIKE $2 || '%'
+            FROM series WHERE LOWER(value) LIKE LOWER($2) || '%'
             ORDER BY value COLLATE opds;
             "#
         );

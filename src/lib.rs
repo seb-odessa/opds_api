@@ -1,6 +1,6 @@
 use log::{debug, error};
 use queries::{Mapper, Query};
-use rusqlite::{params, CachedStatement, Connection};
+use rusqlite::{functions::FunctionFlags, params, CachedStatement, Connection};
 
 use std::{convert::TryFrom, rc::Rc};
 
@@ -334,6 +334,11 @@ impl TryFrom<&str> for OpdsApi {
         debug!("database: {database}");
         let conn = Connection::open(database).inspect_err(|e| error!("{e}"))?;
         conn.create_collation("opds", collation::collation)?;
+
+        let flags = FunctionFlags::SQLITE_DETERMINISTIC;
+        conn.create_scalar_function("LOWER", 1, flags, |ctx| {
+            ctx.get::<String>(0).and_then(|s| Ok(s.to_lowercase()))
+        })?;
         rusqlite::vtab::array::load_module(&conn)?;
         Ok(Self::new(conn))
     }
@@ -370,7 +375,7 @@ mod tests {
     #[test]
     fn authors_next_char_by_prefix() -> anyhow::Result<()> {
         let api = OpdsApi::try_from(DATABASE)?;
-        let result = api.authors_next_char_by_prefix(&String::from("Сто"))?;
+        let result = api.authors_next_char_by_prefix(&String::from("сТо"))?;
 
         assert_eq!(result, vec!["Стое", "Стоу"]);
         Ok(())
@@ -383,7 +388,10 @@ mod tests {
 
         assert_eq!(
             result,
-            (vec![String::from("Александров"), String::from("Александрова")], vec![])
+            (
+                vec![String::from("Александров"), String::from("Александрова")],
+                vec![]
+            )
         );
         Ok(())
     }
@@ -397,19 +405,14 @@ mod tests {
         Ok(())
     }
 
-
     #[test]
     fn search_series_by_prefix() -> anyhow::Result<()> {
         let api = OpdsApi::try_from(DATABASE)?;
         let result = api.search_series_by_prefix(&String::from("Авро"))?;
 
-        assert_eq!(
-            result,
-            (vec![String::from("Аврора [Кауфман]")], vec![])
-        );
+        assert_eq!(result, (vec![String::from("Аврора [Кауфман]")], vec![]));
         Ok(())
     }
-
 
     #[test]
     fn authors_by_last_name() -> anyhow::Result<()> {
