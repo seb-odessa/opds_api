@@ -28,6 +28,41 @@ impl OpdsApi {
         Ok(statement)
     }
 
+    fn search_by_mask<F, S>(mask: S, fetcher: F) -> anyhow::Result<(Vec<String>, Vec<String>)>
+    where
+        F: Fn(&String) -> anyhow::Result<Vec<String>>,
+        S: Into<String>,
+    {
+        let mut mask = mask.into();
+        let mut complete = Vec::new();
+        let mut incomplete = Vec::new();
+
+        loop {
+            let patterns = fetcher(&mask)?;
+            let (mut exact, mut tail) = patterns.into_iter().partition(|curr| mask.eq(curr));
+            complete.append(&mut exact);
+
+            if tail.is_empty() {
+                break;
+            } else if 1 == tail.len() {
+                std::mem::swap(&mut mask, &mut tail[0]);
+            } else if 2 == tail.len() {
+                let are_equal = tail[0].to_lowercase() == tail[1].to_lowercase();
+                if are_equal {
+                    std::mem::swap(&mut mask, &mut tail[0]);
+                } else {
+                    incomplete.append(&mut tail);
+                    break;
+                }
+            } else {
+                incomplete.append(&mut tail);
+                break;
+            }
+        }
+
+        Ok((complete, incomplete))
+    }
+
     /// Create OpdsApi instance
     pub fn new(conn: Connection) -> Self {
         OpdsApi { conn }
@@ -36,6 +71,15 @@ impl OpdsApi {
     /// Returns true if database opened in ReadOnly
     pub fn is_readonly(&self) -> anyhow::Result<bool> {
         Ok(self.conn.is_readonly(rusqlite::DatabaseName::Main)?)
+    }
+
+    /// Returns Authors and NVC of the author name by given prefix
+    pub fn search_authors_by_prefix(
+        &self,
+        prefix: &String,
+    ) -> anyhow::Result<(Vec<String>, Vec<String>)> {
+        let fetcher = |s: &String| self.authors_next_char_by_prefix(s);
+        Self::search_by_mask(prefix, fetcher)
     }
 
     /// Returns next possible variants of the author name by given prefix
@@ -64,6 +108,15 @@ impl OpdsApi {
         } else {
             Err(anyhow::anyhow!("Unexpected mapper"))
         }
+    }
+
+    /// Returns Series and NVC of the author name by given prefix
+    pub fn search_series_by_prefix(
+        &self,
+        prefix: &String,
+    ) -> anyhow::Result<(Vec<String>, Vec<String>)> {
+        let fetcher = |s: &String| self.series_next_char_by_prefix(s);
+        Self::search_by_mask(prefix, fetcher)
     }
 
     /// Returns Authors by exact last name
@@ -324,6 +377,18 @@ mod tests {
     }
 
     #[test]
+    fn search_authors_by_prefix() -> anyhow::Result<()> {
+        let api = OpdsApi::try_from(DATABASE)?;
+        let result = api.search_authors_by_prefix(&String::from("Александр"))?;
+
+        assert_eq!(
+            result,
+            (vec![String::from("Александров"), String::from("Александрова")], vec![])
+        );
+        Ok(())
+    }
+
+    #[test]
     fn series_next_char_by_prefix() -> anyhow::Result<()> {
         let api = OpdsApi::try_from(DATABASE)?;
         let result = api.series_next_char_by_prefix(&String::from("Го"))?;
@@ -331,6 +396,20 @@ mod tests {
         assert_eq!(result, vec!["Гон", "Гор", "Гос"]);
         Ok(())
     }
+
+
+    #[test]
+    fn search_series_by_prefix() -> anyhow::Result<()> {
+        let api = OpdsApi::try_from(DATABASE)?;
+        let result = api.search_series_by_prefix(&String::from("Авро"))?;
+
+        assert_eq!(
+            result,
+            (vec![String::from("Аврора [Кауфман]")], vec![])
+        );
+        Ok(())
+    }
+
 
     #[test]
     fn authors_by_last_name() -> anyhow::Result<()> {
@@ -639,6 +718,64 @@ mod tests {
             .collect::<Vec<Value>>()
         );
 
+        Ok(())
+    }
+
+    fn fetcher(mask: &String) -> anyhow::Result<Vec<String>> {
+        let out = match mask.as_str() {
+            "A" => vec!["A", "Ab", "Ac"],
+            "B" => vec!["B", "BB"],
+            "BB" => vec!["BBB"],
+            "BBB" => vec!["BBBB"],
+            "BBBB" => vec!["BBBB"],
+            "C" => vec!["CC", "cc"],
+            "CC" => vec!["CCC", "ccc"],
+            "CCC" => vec!["CCC", "ccc"],
+            "ccc" => vec!["ccc"],
+            _ => vec![],
+        };
+        if out.is_empty() {
+            Err(anyhow::anyhow!("Unexpected mask '{mask}'"))
+        } else {
+            Ok(out.into_iter().map(|s| String::from(s)).collect())
+        }
+    }
+
+    #[test]
+    fn search_by_mask_a() -> anyhow::Result<()> {
+        let (exact, tail) = OpdsApi::search_by_mask("A", fetcher)?;
+        assert_eq!(
+            vec!["A"],
+            exact.iter().map(|a| a.as_str()).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            vec!["Ab", "Ac"],
+            tail.iter().map(|a| a.as_str()).collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn search_by_mask_b() -> anyhow::Result<()> {
+        let empty: Vec<&str> = Vec::new();
+        let (exact, tail) = OpdsApi::search_by_mask("B", fetcher)?;
+        assert_eq!(
+            vec!["B", "BBBB"],
+            exact.iter().map(|a| a.as_str()).collect::<Vec<_>>()
+        );
+        assert_eq!(empty, tail.iter().map(|a| a.as_str()).collect::<Vec<_>>());
+        Ok(())
+    }
+
+    #[test]
+    fn search_by_mask_c() -> anyhow::Result<()> {
+        let empty: Vec<&str> = Vec::new();
+        let (exact, tail) = OpdsApi::search_by_mask("C", fetcher)?;
+        assert_eq!(
+            vec!["CCC", "ccc"],
+            exact.iter().map(|a| a.as_str()).collect::<Vec<_>>()
+        );
+        assert_eq!(empty, tail.iter().map(|a| a.as_str()).collect::<Vec<_>>());
         Ok(())
     }
 }
