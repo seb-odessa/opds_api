@@ -37,6 +37,8 @@ impl OpdsApi {
         let mut complete = Vec::new();
         let mut incomplete = Vec::new();
 
+        debug!("search_by_mask <- {mask}");
+
         loop {
             let patterns = fetcher(&mask)?;
             let (mut exact, mut tail) = patterns.into_iter().partition(|curr| mask.eq(curr));
@@ -78,12 +80,16 @@ impl OpdsApi {
         &self,
         prefix: &String,
     ) -> anyhow::Result<(Vec<String>, Vec<String>)> {
+        debug!("search_authors_by_prefix <- {prefix}");
+
         let fetcher = |s: &String| self.authors_next_char_by_prefix(s);
         Self::search_by_mask(prefix, fetcher)
     }
 
     /// Returns next possible variants of the author name by given prefix
     pub fn authors_next_char_by_prefix(&self, prefix: &String) -> anyhow::Result<Vec<String>> {
+        debug!("authors_next_char_by_prefix <- {prefix}");
+
         let len = (prefix.chars().count() + 1) as u32;
         let query = Query::AuthorNextCharByPrefix;
         if let Mapper::String(mapper) = Query::mapper(&query) {
@@ -98,6 +104,8 @@ impl OpdsApi {
 
     /// Returns next possible variants of the serie name by given prefix
     pub fn series_next_char_by_prefix(&self, prefix: &String) -> anyhow::Result<Vec<String>> {
+        debug!("series_next_char_by_prefix <- {prefix}");
+
         let len = (prefix.chars().count() + 1) as u32;
         let query = Query::SerieNextCharByPrefix;
         if let Mapper::String(mapper) = Query::mapper(&query) {
@@ -115,12 +123,16 @@ impl OpdsApi {
         &self,
         prefix: &String,
     ) -> anyhow::Result<(Vec<String>, Vec<String>)> {
+        debug!("search_series_by_prefix <- {prefix}");
+
         let fetcher = |s: &String| self.series_next_char_by_prefix(s);
         Self::search_by_mask(prefix, fetcher)
     }
 
     /// Returns Authors by exact last name
     pub fn authors_by_last_name(&self, name: &String) -> anyhow::Result<Vec<Author>> {
+        debug!("authors_by_last_name <- {name}");
+
         let query = Query::AuthorsByLastName;
         if let Mapper::Author(mapper) = Query::mapper(&query) {
             let mut statement = self.prepare(&query)?;
@@ -134,6 +146,8 @@ impl OpdsApi {
 
     /// Returns Authors by Genre name
     pub fn authors_by_genre_id(&self, gid: u32) -> anyhow::Result<Vec<Author>> {
+        debug!("authors_by_genre_id <- {gid}");
+
         let query = Query::AuthorsByGenreId;
         if let Mapper::Author(mapper) = Query::mapper(&query) {
             let mut statement = self.prepare(&query)?;
@@ -147,6 +161,8 @@ impl OpdsApi {
 
     /// Returns Authors by Genre name
     pub fn authors_by_books_ids(&self, ids: Vec<u32>) -> anyhow::Result<Vec<Author>> {
+        debug!("authors_by_books_ids <- {:?}", ids);
+
         use rusqlite::types::Value;
         let query = Query::AuthorsByBooksIds;
         if let Mapper::Author(mapper) = Query::mapper(&query) {
@@ -162,6 +178,8 @@ impl OpdsApi {
 
     /// Returns Series by exact serie name
     pub fn series_by_serie_name(&self, name: &String) -> anyhow::Result<Vec<Serie>> {
+        debug!("series_by_serie_name <- {name}");
+
         let query = Query::SeriesBySerieName;
         if let Mapper::Serie(mapper) = Query::mapper(&query) {
             let mut statement = self.prepare(&query)?;
@@ -175,6 +193,8 @@ impl OpdsApi {
 
     /// Returns Series by Genre name
     pub fn series_by_genre_id(&self, gid: u32) -> anyhow::Result<Vec<Serie>> {
+        debug!("series_by_genre_id <- {gid}");
+
         let query = Query::SeriesByGenreId;
         if let Mapper::Serie(mapper) = Query::mapper(&query) {
             let mut statement = self.prepare(&query)?;
@@ -188,6 +208,8 @@ impl OpdsApi {
 
     /// Returns Series by authors ids
     pub fn series_by_author_ids(&self, fid: u32, mid: u32, lid: u32) -> anyhow::Result<Vec<Serie>> {
+        debug!("series_by_author_ids <- {fid}, {mid}, {lid}");
+
         let query = Query::SeriesByAuthorIds;
         if let Mapper::Serie(mapper) = Query::mapper(&query) {
             let mut statement = self.prepare(&query)?;
@@ -201,6 +223,8 @@ impl OpdsApi {
 
     /// Returns Author by ids
     pub fn author_by_ids(&self, fid: u32, mid: u32, lid: u32) -> anyhow::Result<Option<Author>> {
+        debug!("author_by_ids <- {fid}, {mid}, {lid}");
+
         let query = Query::AuthorByIds;
         if let Mapper::Author(mapper) = Query::mapper(&query) {
             let mut statement = self.prepare(&query)?;
@@ -214,6 +238,8 @@ impl OpdsApi {
 
     /// Returns book by Author by ids
     pub fn books_by_author_ids(&self, fid: u32, mid: u32, lid: u32) -> anyhow::Result<Vec<Book>> {
+        debug!("books_by_author_ids <- {fid}, {mid}, {lid}");
+
         let query = Query::BooksByAuthorIds;
         if let Mapper::Book(mapper) = Query::mapper(&query) {
             let mut statement = self.prepare(&query)?;
@@ -233,6 +259,8 @@ impl OpdsApi {
         lid: u32,
         sid: u32,
     ) -> anyhow::Result<Vec<Book>> {
+        debug!("books_by_author_ids_and_serie_id <- {fid}, {mid}, {lid}, {sid}");
+
         let query = Query::BooksByAuthorIds;
         if let Mapper::Book(mapper) = Query::mapper(&query) {
             let mut statement = self.prepare(&query)?;
@@ -260,6 +288,8 @@ impl OpdsApi {
         mid: u32,
         lid: u32,
     ) -> anyhow::Result<Vec<Book>> {
+        debug!("books_by_author_ids_without_serie <- {fid}, {mid}, {lid}");
+
         let query = Query::BooksByAuthorIds;
         if let Mapper::Book(mapper) = Query::mapper(&query) {
             let mut statement = self.prepare(&query)?;
@@ -276,6 +306,8 @@ impl OpdsApi {
 
     /// Returns book by Serie id
     pub fn books_by_serie_id(&self, sid: u32) -> anyhow::Result<Vec<Book>> {
+        debug!("books_by_serie_id <- {sid}");
+
         let query = Query::BooksBySerieId;
         if let Mapper::Book(mapper) = Query::mapper(&query) {
             let mut statement = self.prepare(&query)?;
@@ -289,6 +321,8 @@ impl OpdsApi {
 
     /// Returns book by Genre id and date filter
     pub fn books_by_genre_id_and_date(&self, gid: u32, date: String) -> anyhow::Result<Vec<Book>> {
+        debug!("books_by_genre_id_and_date <- {gid}, {date}");
+
         let query = Query::BooksByGenreIdAndDate;
         if let Mapper::Book(mapper) = Query::mapper(&query) {
             let mut statement = self.prepare(&query)?;
@@ -302,6 +336,8 @@ impl OpdsApi {
 
     /// Returns Metas of Genres
     pub fn meta_genres(&self) -> anyhow::Result<Vec<String>> {
+        debug!("meta_genres <- ");
+
         let query = Query::MetaGenres;
         if let Mapper::String(mapper) = Query::mapper(&query) {
             let mut statement = self.prepare(&query)?;
@@ -315,6 +351,8 @@ impl OpdsApi {
 
     /// Returns genres Meta
     pub fn genres_by_meta(&self, meta: &String) -> anyhow::Result<Vec<Value>> {
+        debug!("genres_by_meta <- {meta}");
+
         let query = Query::GenresByMeta;
         if let Mapper::Value(mapper) = Query::mapper(&query) {
             let mut statement = self.prepare(&query)?;
@@ -332,6 +370,7 @@ impl TryFrom<&str> for OpdsApi {
 
     fn try_from(database: &str) -> anyhow::Result<Self> {
         debug!("database: {database}");
+
         let conn = Connection::open(database).inspect_err(|e| error!("{e}"))?;
         conn.create_collation("opds", collation::collation)?;
 
@@ -347,7 +386,6 @@ impl TryFrom<&String> for OpdsApi {
     type Error = anyhow::Error;
 
     fn try_from(database: &String) -> anyhow::Result<Self> {
-        debug!("database: {database}");
         OpdsApi::try_from(database.as_str())
     }
 }
