@@ -236,6 +236,21 @@ impl OpdsApi {
         }
     }
 
+    /// Returns Book by id
+    pub fn book_by_id(&self, bid: u32) -> anyhow::Result<Option<Book>> {
+        debug!("book_by_id <- {bid}");
+
+        let query = Query::BookById;
+        if let Mapper::Book(mapper) = Query::mapper(&query) {
+            let mut statement = self.prepare(&query)?;
+            let rows = statement.query([bid])?.mapped(mapper);
+            let res = transfrom(rows)?;
+            Ok(res.first().cloned())
+        } else {
+            Err(anyhow::anyhow!("Unexpected mapper"))
+        }
+    }
+
     /// Returns book by Author by ids
     pub fn books_by_author_ids(&self, fid: u32, mid: u32, lid: u32) -> anyhow::Result<Vec<Book>> {
         debug!("books_by_author_ids <- {fid}, {mid}, {lid}");
@@ -817,6 +832,27 @@ mod tests {
             exact.iter().map(|a| a.as_str()).collect::<Vec<_>>()
         );
         assert_eq!(empty, tail.iter().map(|a| a.as_str()).collect::<Vec<_>>());
+        Ok(())
+    }
+
+    #[test]
+    fn book_by_id() -> anyhow::Result<()> {
+
+        let api = OpdsApi::try_from(DATABASE)?;
+
+        let strings = api
+            .book_by_id(768409)?
+            .into_iter()
+            .map(|a| format!("{a}"))
+            .collect::<Vec<_>>();
+
+        let result = strings.iter().map(|a| a.as_str()).collect::<Vec<_>>();
+
+        assert_eq!(
+            result,
+            vec!["Рыцари, закованные в сталь - Говард Пайл (2024-06-01) [2.46 MB]"]
+        );
+
         Ok(())
     }
 }
