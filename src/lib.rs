@@ -393,6 +393,22 @@ impl OpdsApi {
         }
     }
 
+    /// Returns Series by exact serie name
+    pub fn books_by_book_title(&self, name: &String) -> anyhow::Result<Vec<Book>> {
+        debug!("series_by_serie_name <- {name}");
+
+        let query = Query::BooksByBookTitle;
+        if let Mapper::Book(mapper) = Query::mapper(&query) {
+            let mut statement = self.prepare(&query)?;
+            let rows = statement.query([name])?.mapped(mapper);
+            let res = transfrom(rows)?;
+            Ok(res)
+        } else {
+            Err(anyhow::anyhow!("Unexpected mapper"))
+        }
+    }
+
+
     /// Returns Metas of Genres
     pub fn meta_genres(&self) -> anyhow::Result<Vec<String>> {
         debug!("meta_genres <- ");
@@ -931,4 +947,25 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn books_by_book_title() -> anyhow::Result<()> {
+        let api = OpdsApi::try_from(DATABASE)?;
+
+        let strings = api
+            .books_by_book_title(&"Авиатрисы".to_owned())?
+            .into_iter()
+            .map(|a| format!("{a}"))
+            .collect::<Vec<_>>();
+
+        let result = strings.iter().map(|a| a.as_str()).collect::<Vec<_>>();
+
+        assert_eq!(
+            result,
+            vec!["1 Авиатрисы - автор неизвестный (2024-06-30) [2.70 MB]"]
+        );
+
+        Ok(())
+    }
+
 }

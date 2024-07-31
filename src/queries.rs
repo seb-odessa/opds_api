@@ -24,6 +24,7 @@ pub enum Query {
     BookById,
     BookNextCharByPrefix,
     BooksByAuthorIds,
+    BooksByBookTitle,
     BooksByGenreIdAndDate,
     BooksBySerieId,
     GenresByMeta,
@@ -35,7 +36,7 @@ pub enum Query {
     SeriesBySerieName,
 }
 impl Query {
-    pub const VALUES: [Self; 17] = [
+    pub const VALUES: [Self; 18] = [
         Self::AuthorNextCharByPrefix,
         Self::SerieNextCharByPrefix,
         Self::BookNextCharByPrefix,
@@ -46,6 +47,7 @@ impl Query {
         Self::BookById,
         Self::BooksByAuthorIds,
         Self::BooksBySerieId,
+        Self::BooksByBookTitle,
         Self::MetaGenres,
         Self::GenresByMeta,
         Self::SeriesByGenreId,
@@ -81,6 +83,7 @@ impl Query {
             Self::BookById => Mapper::Book(map_to_book),
             Self::BooksBySerieId => Mapper::Book(map_to_book),
             Self::BooksByAuthorIds => Mapper::Book(map_to_book),
+            Self::BooksByBookTitle => Mapper::Book(map_to_book),
             Self::BooksByGenreIdAndDate => Mapper::Book(map_to_book),
 
             Self::MetaGenres => Mapper::String(map_to_string),
@@ -315,8 +318,33 @@ lazy_static::lazy_static! {
 		    JOIN last_names ON last_names.id = last_name_id;
             "#
         );
-
-
+        m.insert(
+            Query::BooksByBookTitle,
+            r#"
+			WITH matched(id, name) AS (
+                SELECT id, value FROM titles WHERE titles.value = $1
+            )
+            SELECT
+                books.book_id AS id,
+				matched.name AS name,
+                series.id AS sid,
+                series_map.serie_num AS idx,
+                first_names.id AS fid, first_names.value AS fname,
+                middle_names.id AS mid, middle_names.value AS mname,
+			    last_names.id AS lid, last_names.value AS lname,
+                books.book_size AS size,
+                dates.value AS added
+            FROM matched
+			JOIN books ON books.title_id = matched.id
+            JOIN dates ON dates.id = books.date_id
+			JOIN authors_map ON authors_map.book_id = books.book_id
+   		    JOIN first_names ON first_names.id = first_name_id
+		    JOIN middle_names ON middle_names.id = middle_name_id
+		    JOIN last_names ON last_names.id = last_name_id
+			LEFT JOIN series_map ON series_map.book_id = books.book_id
+		    LEFT JOIN series ON series.id = series_map.serie_id;
+            "#
+        );
         m.insert(
             Query::BooksByAuthorIds, r#"
             SELECT
