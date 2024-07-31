@@ -22,6 +22,7 @@ pub enum Query {
     AuthorsByGenreId,
     AuthorsByLastName,
     BookById,
+    BookNextCharByPrefix,
     BooksByAuthorIds,
     BooksByGenreIdAndDate,
     BooksBySerieId,
@@ -34,9 +35,10 @@ pub enum Query {
     SeriesBySerieName,
 }
 impl Query {
-    pub const VALUES: [Self; 16] = [
+    pub const VALUES: [Self; 17] = [
         Self::AuthorNextCharByPrefix,
         Self::SerieNextCharByPrefix,
+        Self::BookNextCharByPrefix,
         Self::AuthorsByLastName,
         Self::SeriesBySerieName,
         Self::SeriesByAuthorIds,
@@ -64,6 +66,7 @@ impl Query {
         match self {
             Self::AuthorNextCharByPrefix => Mapper::String(map_to_string),
             Self::SerieNextCharByPrefix => Mapper::String(map_to_string),
+            Self::BookNextCharByPrefix => Mapper::String(map_to_string),
 
             Self::AuthorByIds => Mapper::Author(map_to_author),
             Self::AuthorsByGenreId => Mapper::Author(map_to_author),
@@ -100,6 +103,13 @@ lazy_static::lazy_static! {
             Query::SerieNextCharByPrefix, r#"
             SELECT DISTINCT substr(value, 1, $1) AS value
             FROM series WHERE LOWER(value) LIKE LOWER($2) || '%'
+            ORDER BY value COLLATE opds;
+            "#
+        );
+        m.insert(
+            Query::BookNextCharByPrefix, r#"
+            SELECT DISTINCT substr(value, 1, $1) AS value
+            FROM titles WHERE LOWER(value) LIKE LOWER($2) || '%'
             ORDER BY value COLLATE opds;
             "#
         );

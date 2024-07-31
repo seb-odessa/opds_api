@@ -118,7 +118,23 @@ impl OpdsApi {
         }
     }
 
-    /// Returns Series and NVC of the author name by given prefix
+    /// Returns next possible variants of the serie name by given prefix
+    pub fn books_next_char_by_prefix(&self, prefix: &String) -> anyhow::Result<Vec<String>> {
+        debug!("books_next_char_by_prefix <- {prefix}");
+
+        let len = (prefix.chars().count() + 1) as u32;
+        let query = Query::BookNextCharByPrefix;
+        if let Mapper::String(mapper) = Query::mapper(&query) {
+            let mut statement = self.prepare(&query)?;
+            let rows = statement.query(params![len, prefix])?.mapped(mapper);
+            let res = transfrom(rows)?;
+            Ok(res)
+        } else {
+            Err(anyhow::anyhow!("Unexpected mapper"))
+        }
+    }
+
+    /// Returns NVC of the serie name by given prefix
     pub fn search_series_by_prefix(
         &self,
         prefix: &String,
@@ -126,6 +142,17 @@ impl OpdsApi {
         debug!("search_series_by_prefix <- {prefix}");
 
         let fetcher = |s: &String| self.series_next_char_by_prefix(s);
+        Self::search_by_mask(prefix, fetcher)
+    }
+
+    /// Returns NVC of the book title by given prefix
+    pub fn search_books_by_prefix(
+        &self,
+        prefix: &String,
+    ) -> anyhow::Result<(Vec<String>, Vec<String>)> {
+        debug!("search_books_by_prefix <- {prefix}");
+
+        let fetcher = |s: &String| self.books_next_char_by_prefix(s);
         Self::search_by_mask(prefix, fetcher)
     }
 
@@ -481,6 +508,15 @@ mod tests {
         let result = api.search_series_by_prefix(&String::from("Авро"))?;
 
         assert_eq!(result, (vec![String::from("Аврора [Кауфман]")], vec![]));
+        Ok(())
+    }
+
+    #[test]
+    fn search_books_by_prefix() -> anyhow::Result<()> {
+        let api = OpdsApi::try_from(DATABASE)?;
+        let result = api.search_books_by_prefix(&String::from("Ав"))?;
+
+        assert_eq!(result, (vec![String::from("Авиатрисы")], vec![]));
         Ok(())
     }
 
