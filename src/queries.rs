@@ -30,10 +30,11 @@ pub enum Query {
     SerieNextCharByPrefix,
     SeriesByAuthorIds,
     SeriesByGenreId,
+    SeriesByIds,
     SeriesBySerieName,
 }
 impl Query {
-    pub const VALUES: [Self; 15] = [
+    pub const VALUES: [Self; 16] = [
         Self::AuthorNextCharByPrefix,
         Self::SerieNextCharByPrefix,
         Self::AuthorsByLastName,
@@ -49,6 +50,7 @@ impl Query {
         Self::AuthorsByGenreId,
         Self::BooksByGenreIdAndDate,
         Self::AuthorsByBooksIds,
+        Self::SeriesByIds,
     ];
 
     pub fn get(&self) -> anyhow::Result<&'static str> {
@@ -68,6 +70,7 @@ impl Query {
             Self::AuthorsByLastName => Mapper::Author(map_to_author),
             Self::AuthorsByBooksIds => Mapper::Author(map_to_author),
 
+            Self::SeriesByIds => Mapper::Serie(map_to_serie),
             Self::SeriesByGenreId => Mapper::Serie(map_to_serie),
             Self::SeriesBySerieName => Mapper::Serie(map_to_serie),
             Self::SeriesByAuthorIds => Mapper::Serie(map_to_serie),
@@ -128,9 +131,29 @@ lazy_static::lazy_static! {
 			JOIN middle_names ON middle_names.id = authors_map.middle_name_id
 			JOIN last_names ON last_names.id = authors_map.last_name_id
 			WHERE authors_map.book_id IN rarray($1)
-            ORDER BY lname, fname, mname  COLLATE opds;
+            ORDER BY lname, fname, mname COLLATE opds;
             "#
         );
+        m.insert(
+            Query::SeriesByIds, r#"
+            SELECT
+                series.id AS id,
+                series.value AS name,
+                count(books.book_id) as count,
+			    first_names.id AS fid, first_names.value AS fname,
+                middle_names.id AS mid, middle_names.value AS mname,
+			    last_names.id AS lid, last_names.value AS lname
+            FROM series
+		    JOIN series_map ON series_map.serie_id = series.id
+		    JOIN authors_map ON authors_map.book_id = series_map.book_id
+		    JOIN books ON books.book_id = series_map.book_id
+		    JOIN first_names ON first_names.id = first_name_id
+		    JOIN middle_names ON middle_names.id = middle_name_id
+		    JOIN last_names ON last_names.id = last_name_id
+            WHERE series.id IN rarray($1)
+            GROUP BY 1, 4, 6, 8
+		    ORDER BY name, lname, fname, mname COLLATE opds;
+        "#);
         m.insert(
             Query::SeriesBySerieName, r#"
             SELECT

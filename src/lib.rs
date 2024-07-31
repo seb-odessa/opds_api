@@ -163,10 +163,27 @@ impl OpdsApi {
     pub fn authors_by_books_ids(&self, ids: Vec<u32>) -> anyhow::Result<Vec<Author>> {
         debug!("authors_by_books_ids <- {:?}", ids);
 
-        use rusqlite::types::Value;
         let query = Query::AuthorsByBooksIds;
         if let Mapper::Author(mapper) = Query::mapper(&query) {
             let mut statement = self.prepare(&query)?;
+            use rusqlite::types::Value;
+            let params = Rc::new(ids.into_iter().map(Value::from).collect::<Vec<Value>>());
+            let rows = statement.query(params![params])?.mapped(mapper);
+            let res = transfrom(rows)?;
+            Ok(res)
+        } else {
+            Err(anyhow::anyhow!("Unexpected mapper"))
+        }
+    }
+
+    /// Returns Series by series ids
+    pub fn series_by_ids(&self, ids: Vec<u32>) -> anyhow::Result<Vec<Serie>> {
+        debug!("series_by_serie_name <- {:?}", ids);
+
+        let query = Query::SeriesByIds;
+        if let Mapper::Serie(mapper) = Query::mapper(&query) {
+            let mut statement = self.prepare(&query)?;
+            use rusqlite::types::Value;
             let params = Rc::new(ids.into_iter().map(Value::from).collect::<Vec<Value>>());
             let rows = statement.query(params![params])?.mapped(mapper);
             let res = transfrom(rows)?;
@@ -837,7 +854,6 @@ mod tests {
 
     #[test]
     fn book_by_id() -> anyhow::Result<()> {
-
         let api = OpdsApi::try_from(DATABASE)?;
 
         let strings = api
@@ -851,6 +867,30 @@ mod tests {
         assert_eq!(
             result,
             vec!["Рыцари, закованные в сталь - Говард Пайл (2024-06-01) [2.46 MB]"]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn series_by_ids() -> anyhow::Result<()> {
+        let api = OpdsApi::try_from(DATABASE)?;
+
+        let strings = api
+            .series_by_ids(vec![42, 44, 2])?
+            .into_iter()
+            .map(|a| format!("{a}"))
+            .collect::<Vec<_>>();
+
+        let result = strings.iter().map(|a| a.as_str()).collect::<Vec<_>>();
+
+        assert_eq!(
+            result,
+            vec![
+                "Киёси Митараи [Содзи Симада] (1)",
+                "Разрушенное королевство [Л. Дж. Эндрюс] (1)",
+                "Родион Ванзаров [Антон Чиж] (1)"
+            ]
         );
 
         Ok(())
