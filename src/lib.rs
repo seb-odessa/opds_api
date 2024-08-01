@@ -94,7 +94,8 @@ impl OpdsApi {
         let query = Query::AuthorNextCharByPrefix;
         if let Mapper::String(mapper) = Query::mapper(&query) {
             let mut statement = self.prepare(&query)?;
-            let rows = statement.query(params![len, prefix])?.mapped(mapper);
+            let matcher = format!("{prefix}*");
+            let rows = statement.query(params![len, matcher])?.mapped(mapper);
             let res = transfrom(rows)?;
             Ok(res)
         } else {
@@ -110,7 +111,8 @@ impl OpdsApi {
         let query = Query::SerieNextCharByPrefix;
         if let Mapper::String(mapper) = Query::mapper(&query) {
             let mut statement = self.prepare(&query)?;
-            let rows = statement.query(params![len, prefix])?.mapped(mapper);
+            let matcher = format!("{prefix}*");
+            let rows = statement.query(params![len, matcher])?.mapped(mapper);
             let res = transfrom(rows)?;
             Ok(res)
         } else {
@@ -126,7 +128,8 @@ impl OpdsApi {
         let query = Query::BookNextCharByPrefix;
         if let Mapper::String(mapper) = Query::mapper(&query) {
             let mut statement = self.prepare(&query)?;
-            let rows = statement.query(params![len, prefix])?.mapped(mapper);
+            let matcher = format!("{prefix}*");
+            let rows = statement.query(params![len, matcher])?.mapped(mapper);
             let res = transfrom(rows)?;
             Ok(res)
         } else {
