@@ -187,7 +187,7 @@ impl OpdsApi {
         let query = Query::AuthorsByLastName;
         if let Mapper::Author(mapper) = Query::mapper(&query) {
             let mut statement = self.prepare(&query)?;
-            let rows = statement.query([name])?.mapped(mapper);
+            let rows = statement.query([name.to_lowercase()])?.mapped(mapper);
             let res = transfrom(rows)?;
             Ok(res)
         } else {

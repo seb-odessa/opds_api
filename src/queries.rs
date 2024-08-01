@@ -118,18 +118,17 @@ lazy_static::lazy_static! {
         );
         m.insert(
             Query::AuthorsByLastName, r#"
-            WITH last_name(fid, mid, lid, value) AS (
-                SELECT DISTINCT first_name_id, middle_name_id, id, value
-			    FROM last_names LEFT JOIN authors_map ON authors_map.last_name_id = id
-                WHERE value = $1
+            WITH matched(lid, name) AS (
+                SELECT id, value FROM last_names WHERE LOWER(value) = $1
             )
-            SELECT
-  	            fid, first_names.value AS fname,
-                mid, middle_names.value AS mname,
-			    lid, last_name.value AS lname
-			FROM last_name
-            JOIN middle_names ON middle_names.id = mid
-            JOIN first_names ON first_names.id = fid
+            SELECT DISTINCT
+  	            first_names.id AS fid, first_names.value AS fname,
+                middle_names.id AS mid, middle_names.value AS mname,
+			    matched.lid AS lid, matched.name AS lname
+			FROM matched
+			JOIN authors_map ON authors_map.last_name_id = lid
+            JOIN middle_names ON middle_names.id = authors_map.middle_name_id
+            JOIN first_names ON first_names.id = authors_map.first_name_id
             ORDER BY lname, fname, mname COLLATE opds;
             "#
         );
