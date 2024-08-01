@@ -94,7 +94,14 @@ impl OpdsApi {
         let query = Query::AuthorNextCharByPrefix;
         if let Mapper::String(mapper) = Query::mapper(&query) {
             let mut statement = self.prepare(&query)?;
-            let matcher = format!("{prefix}*");
+            let matcher = format!(
+                "{}*",
+                prefix
+                    .replace("[", "?")
+                    .replace("]", "?")
+                    .replace("*", "?")
+                    .to_lowercase()
+            );
             let rows = statement.query(params![len, matcher])?.mapped(mapper);
             let res = transfrom(rows)?;
             Ok(res)
@@ -111,7 +118,14 @@ impl OpdsApi {
         let query = Query::SerieNextCharByPrefix;
         if let Mapper::String(mapper) = Query::mapper(&query) {
             let mut statement = self.prepare(&query)?;
-            let matcher = format!("{prefix}*");
+            let matcher = format!(
+                "{}*",
+                prefix
+                    .replace("[", "?")
+                    .replace("]", "?")
+                    .replace("*", "?")
+                    .to_lowercase()
+            );
             let rows = statement.query(params![len, matcher])?.mapped(mapper);
             let res = transfrom(rows)?;
             Ok(res)
@@ -128,7 +142,14 @@ impl OpdsApi {
         let query = Query::BookNextCharByPrefix;
         if let Mapper::String(mapper) = Query::mapper(&query) {
             let mut statement = self.prepare(&query)?;
-            let matcher = format!("{prefix}*");
+            let matcher = format!(
+                "{}*",
+                prefix
+                    .replace("[", "?")
+                    .replace("]", "?")
+                    .replace("*", "?")
+                    .to_lowercase()
+            );
             let rows = statement.query(params![len, matcher])?.mapped(mapper);
             let res = transfrom(rows)?;
             Ok(res)
@@ -411,7 +432,6 @@ impl OpdsApi {
         }
     }
 
-
     /// Returns Metas of Genres
     pub fn meta_genres(&self) -> anyhow::Result<Vec<String>> {
         debug!("meta_genres <- ");
@@ -524,7 +544,7 @@ mod tests {
     #[test]
     fn search_series_by_prefix() -> anyhow::Result<()> {
         let api = OpdsApi::try_from(DATABASE)?;
-        let result = api.search_series_by_prefix(&String::from("Авро"))?;
+        let result = api.search_series_by_prefix(&String::from("Авр"))?;
 
         assert_eq!(result, (vec![String::from("Аврора [Кауфман]")], vec![]));
         Ok(())
@@ -970,5 +990,4 @@ mod tests {
 
         Ok(())
     }
-
 }
