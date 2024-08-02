@@ -148,22 +148,22 @@ lazy_static::lazy_static! {
         );
         m.insert(
             Query::SeriesByIds, r#"
-            SELECT
-                series.id AS id,
+			SELECT
+                series_map.serie_id AS id,
                 series.value AS name,
-                count(books.book_id) as count,
-			    first_names.id AS fid, first_names.value AS fname,
-                middle_names.id AS mid, middle_names.value AS mname,
-			    last_names.id AS lid, last_names.value AS lname
-            FROM series
-		    JOIN series_map ON series_map.serie_id = series.id
-		    JOIN authors_map ON authors_map.book_id = series_map.book_id
-		    JOIN books ON books.book_id = series_map.book_id
-		    JOIN first_names ON first_names.id = first_name_id
-		    JOIN middle_names ON middle_names.id = middle_name_id
-		    JOIN last_names ON last_names.id = last_name_id
+                count(series_map.book_id) as count,
+			    authors_map.first_name_id AS fid, first_names.value AS fname,
+                authors_map.middle_name_id AS mid, middle_names.value AS mname,
+			    authors_map.last_name_id AS lid, last_names.value AS lname
+            FROM series_map
+			JOIN series ON series_map.serie_id = series.id
+			JOIN books ON books.book_id = series_map.book_id
+		    JOIN authors_map ON authors_map.book_id = books.book_id
+		    JOIN first_names ON first_names.id = authors_map.first_name_id
+ 		    JOIN middle_names ON middle_names.id = authors_map.middle_name_id
+ 		    JOIN last_names ON last_names.id = authors_map.last_name_id
             WHERE series.id IN rarray($1)
-            GROUP BY 1, 4, 6, 8
+            GROUP BY 1, 2, 4, 5, 6, 7, 8, 9
 		    ORDER BY name, lname, fname, mname COLLATE opds;
         "#);
         m.insert(
